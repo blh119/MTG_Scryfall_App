@@ -25,10 +25,13 @@ scryfall_clean_data = (scryfall_raw_data
                        .pipe(create_keyword_string)
                        .pipe(create_legalities)
                        .pipe(count_number_of_color_pips)
-                       .pipe(double_cards))
+                      # .pipe(double_cards)
+                       )
+
+scryfall_clean_data, scryfall_clean_data_doubles = double_cards(scryfall_clean_data)
 
 write_data_local(df = scryfall_clean_data, raw_data = False, file_name = "clean_scryfall_api_call")
-
+write_data_local(df = scryfall_clean_data_doubles, raw_data = False, file_name = "clean_data_doubles")
 
 scryfall_clean_data["type_line"] = scryfall_clean_data["type_line"].str.replace(" — ", " - ", regex = True)
 

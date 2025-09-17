@@ -42,6 +42,9 @@ GAME_FORMATS = ["standard", "future", "historic",
                 "brawl", "alchemy", "paupercommander",
                 "duel", "oldschool", "premodern", "predh"]
 
+NON_LEGAL_MAGIC_SETS = ["Unglued", "Unhinged", "Unstable", "Unsanctioned",
+                        "Unfinity"]
+
 SCRYFALL_CARDS_URL = "https://data.scryfall.io/default-cards/default-cards-20250413212519.json"
 
 DB_HOST = "localhost"

@@ -39,7 +39,8 @@ def filter_tokens_and_basic_lands(df):
                                                                "saga", "class", "case", "flip",
                                                                "leveler", "prototype"])) &
                                       ~(df_reduced.name.isin(["Forest", "Plains", "Swamp", "Island",
-                                                              "Mountain"]))]
+                                                              "Mountain"])) &
+                                      ~(df_reduced.set_name.isin(NON_LEGAL_MAGIC_SETS))]
     return df_reduced_clean
 
 def get_card_subtypes(df):
@@ -212,8 +213,7 @@ def double_cards(df):
     
     df_clean_double_cards = df_clean.loc[df_clean["double_cards"] == True, ]
     
-    
-    return df_clean
+    return df_clean, df_clean_double_cards
 
 def create_database(NEW_DB_NAME, server):
     
