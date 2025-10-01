@@ -202,18 +202,33 @@ def double_cards(df):
     
     df_clean = df.copy()
     
-    df_clean["double_cards"] = np.select(
-        
-        condlist = [df_clean["name"].apply(lambda x: bool(re.search(r"\//", str(x)))),
-                    df_clean["name"].isna()],
-        choicelist = [True, np.nan],
-        default = False
-        
-    ).astype(bool)
+    df_clean[["card_name_1", "card_name_2"]] = df_clean.name.apply(
+            lambda x: pd.Series(str(x).split("//"))
+        )
     
-    df_clean_double_cards = df_clean.loc[df_clean["double_cards"] == True, ]
+    df_clean[["mana_cost_1", "mana_cost_2"]] = df_clean.mana_cost.apply(
+        
+            lambda x: pd.Series(str(x).split("//"))
+        )
     
-    return df_clean, df_clean_double_cards
+    df_clean[["type_line_1", "type_line_2"]] = df_clean.type_line.apply(
+        
+            lambda x: pd.Series(str(x).split("//"))
+        )
+    
+    df_clean[["card_type_1", "card_type_2"]] = df_clean.card_type.apply(
+        
+            lambda x: pd.Series(str(x).split("//"))
+        
+        )
+    
+    df_clean[["card_subtype_1_1", "card_subtype_1_2"]] = df_clean.card_subtype1.apply(
+        
+            lambda x: pd.Series(str(x).split("//"))
+        
+        )
+    
+    return df_clean
 
 def create_database(NEW_DB_NAME, server):
     
