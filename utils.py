@@ -53,7 +53,6 @@ def get_card_subtypes(df):
     # Check the number of columns in split_columns
     split_columns.columns = ["card_type", "card_subtype1", "card_subtype2", "card_subtype3"]
     
-    
     # Now assign the split columns to all_mjr_cards_data_clean only where is_land == 0
     # Ensure the indexes align
     for card_column in split_columns.columns:
@@ -120,6 +119,32 @@ def is_in_format(df):
             choicelist = [True, np.nan], 
             default = False).astype(bool)
         
+    return df_clean
+
+def is_card_type(df):
+    
+    df_clean = df.copy()
+    
+    for card_type in CARD_TYPES:
+        
+        df_clean["has_card_type"] = df_clean["type_line"].str.contains(
+            
+            card_type, na = False, regex = True
+            
+            )
+        
+        df_clean[r"is_{card_type}"] = np.select(
+            
+            condlist = [
+                
+                condlist = [has_card_type,
+                            df_clean["type_line"].isna()],
+                choicelist = [True, np.nan], 
+                default = False
+            ]
+
+        ).astype(bool)
+    
     return df_clean
 
 def create_keyword_string(df):
@@ -198,35 +223,38 @@ def count_number_of_color_pips(df):
     
     return df_output
 
+def get_number_of_splits(df, column_name):
+    
+    df["number_of_splits"] = df[column_name].apply(
+        
+        lambda x: len(re.findall(pattern = r"\\\\", string = x)),
+        
+        )
+    
+    return max(df["number_of_splits"])
+
 def double_cards(df):
     
     df_clean = df.copy()
     
-    df_clean[["card_name_1", "card_name_2"]] = df_clean.name.apply(
-            lambda x: pd.Series(str(x).split("//"))
-        )
+    name_number_of_splits = get_number_of_splits(df_clean, "name")
+    mana_cost_number_of_splits = get_number_of_splits(df_clean, "mana_cost")
+    type_line_number_of_splits = get_number_of_splits(df_clean, "type_line")
+    card_type_number_of_splits = get_number_of_splits(df_clean, "card_type")
     
-    df_clean[["mana_cost_1", "mana_cost_2"]] = df_clean.mana_cost.apply(
-        
-            lambda x: pd.Series(str(x).split("//"))
-        )
+    card_name_list = [f"card_name_{i}" for i in range(1, number_of_splits + 1)]
     
-    df_clean[["type_line_1", "type_line_2"]] = df_clean.type_line.apply(
-        
-            lambda x: pd.Series(str(x).split("//"))
-        )
     
-    df_clean[["card_type_1", "card_type_2"]] = df_clean.card_type.apply(
-        
-            lambda x: pd.Series(str(x).split("//"))
-        
-        )
     
-    df_clean[["card_subtype_1_1", "card_subtype_1_2"]] = df_clean.card_subtype1.apply(
-        
-            lambda x: pd.Series(str(x).split("//"))
-        
-        )
+    
+    df_clean[["card_name_1", "card_name_2", "card_name_3"]] = df_clean.name.str.split("//", n = 3, expand = True)
+    df_clean[["mana_cost_1", "mana_cost_2", "mana_cost_3"]] = df_clean.mana_cost.str.split("//", n = 3, expand = True)
+    
+    df_clean[["type_line_1", "type_line_2", "type_line_3"]] = df_clean.type_line.str.split("//", n = 3, expand = True)
+    
+    df_clean[["card_type_1", "card_type_2", "card_type_3"]] = df_clean.card_type.str.split("//", n = 3, expand = True)
+    
+    df_clean[["card_subtype_1_1", "card_subtype_1_2", "card_subtype_1_3"]] = df_clean.card_subtype1.str.split("//", n = 3, expand = True)
     
     return df_clean
 

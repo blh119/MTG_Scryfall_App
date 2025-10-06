@@ -24,7 +24,7 @@ scryfall_clean_data = (scryfall_raw_data
                        .pipe(is_in_format)
                        .pipe(create_keyword_string)
                        .pipe(create_legalities)
-                       .pipe(count_number_of_color_pips)
+                       .pipe(count_number_of_color_pips))
                        .pipe(double_cards)
                        )
 

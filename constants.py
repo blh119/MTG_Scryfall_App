@@ -21,8 +21,9 @@ CARD_LAYOUTS = ["normal", "adventure", "transform", "split",
                 "saga", "class", "case", "flip",
                 "leveler", "prototype"]
 
-CARD_TYPES = ["Land", "Legend", "Artifact", "Enchantment", "Aura", "Battle",
-              "Instant", "Sorcery", "Creature", "Planeswalker"]
+CARD_TYPES = ["Land", "Legendary", "Artifact", "Enchantment", "Aura", "Battle",
+              "Instant", "Sorcery", "Creature", "Planeswalker", "Vanguard",
+              "Kindred"]
 
 COLORS_DICT = {"blue": "U",
                "red": "R",
