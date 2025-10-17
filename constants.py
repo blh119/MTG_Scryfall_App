@@ -4,7 +4,6 @@ Created on Thu Jun 26 23:29:55 2025
 
 @author: holli
 """
-
 SELECTED_COLUMNS = ["object", "id", "name", "lang",
                     "released_at", "uri", "scryfall_uri", "layout",
                     "mana_cost", "cmc", "type_line", "oracle_text",
@@ -34,7 +33,6 @@ COLORS_DICT = {"blue": "U",
 
 COLORS = ["blue", "red", "white", "black", "green"]
 
-
 GAME_FORMATS = ["standard", "future", "historic",
                 "timeless", "gladiator", "pioneer",
                 "explorer", "modern", "legacy",
@@ -43,8 +41,20 @@ GAME_FORMATS = ["standard", "future", "historic",
                 "brawl", "alchemy", "paupercommander",
                 "duel", "oldschool", "premodern", "predh"]
 
+CARD_LAYOUT_KEEP = ["normal", "adventure", "transform", "split",
+                    "modal_dfc", "planar", "reversilbe_card", "meld",
+                    "saga", "class", "case", "flip",
+                    "leveler", "prototype"]
+
 NON_LEGAL_MAGIC_SETS = ["Unglued", "Unhinged", "Unstable", "Unsanctioned",
                         "Unfinity"]
+
+COLOR_PIPS_DICT = {"blue": "U",
+                   "red": "R",
+                   "white": "W",
+                   "black": "B",
+                   "green": "G",
+                   "colorless": "C"}
 
 SCRYFALL_CARDS_URL = "https://data.scryfall.io/default-cards/default-cards-20250413212519.json"
 
