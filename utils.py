@@ -41,7 +41,7 @@ class MTGDataProcessor:
         
         json_data = self.get_url_data(url)
         self.df = self.json_to_dataframe(json_data)
-        return self.df
+        
     
     def filter_tokens_and_basic_lands(self):
         
@@ -117,7 +117,7 @@ class MTGDataProcessor:
                 
                 ).astype("boolean")
             
-            df_clean[df_clean["games"].isna(), f"is_in{current_game}"] = np.nan
+            df_clean[df_clean["games"].isna(), f"is_in_{current_game}"] = np.nan
             
         self.df = df_clean
         
@@ -199,9 +199,9 @@ class MTGDataProcessor:
         
         self.df = df_output
 
-    def get_number_of_splits(self, column_name):
+    def get_number_of_splits(df, column_name):
         
-        df_clean = self.df.copy()
+        df_clean = df.copy()
         
         df_clean["number_of_splits"] = df_clean[column_name].apply(
             
@@ -209,9 +209,75 @@ class MTGDataProcessor:
             
             )
         
-        return max(df_clean["number_of_splits"])
+        return max(df_clean["number_of_splits"]) + 1
+    
+    def split_types(self):
+        
+        df_clean = self.df.copy()
+        
+        for card_type in self.card_types:
+            
+            sub_pattern = f"{card_type} -"
+            
+            df_clean["type_line"] = df_clean["type_line"].apply(
+                
+                lambda x: re.sub(pattern = sub_pattern, repl = "", count = 0, string = str(x))
+                
+                )
+        
+        name_number_of_splits = get_number_of_splits(df_clean, "name")
+        mana_cost_number_of_splits = get_number_of_splits(df_clean, "mana_cost")
+        type_line_number_of_splits = get_number_of_splits(df_clean, "type_line")
+        card_type_number_of_splits = get_number_of_splits(df_clean, "card_type")
+        
+        card_name_list = [f"card_name-{i}" for i in range(1, name_number_of_splits + 1)]
+        mana_cost_list = [f"mana_cost_{i}" for i in range(1, mana_cost_number_of_splits + 1)]
+        type_line_list = [f"type_line_{i}" for i in range(1, type_line_number_of_splits + 1)]
+        card_type_list = [f"card_type_{i}" for i in range(1, card_type_number_of_splits + 1)]
+        
+        # card_name df
+        df_clean_card_name = df_clean["name"].str.split("\\\\", expand = True)
+        df_clean_card_name.columns = card_type_list
+        
+        # mana cost df
+        df_clean_mana_cost = df_clean["mana_cost"].str.split("\\\\", expand = True)
+        df_clean_mana_cost.columns = mana_cost_list
+        
+        # type line list
+        df_clean_type_line = df_clean["type_line"].str_split("\\\\", expand = True)
+        df_clean_type_line.columns = type_line_list
+        
+        # card type list
+        df_clean_card_type = df_clean["card_type"].str.split("\\\\", expand = True)
+        df_clean_card_type.columns = card_type_list
+        
+        df_clean = pd.concat([df_clean,
+                              df_clean_card_name,
+                              df_clean_mana_cost, 
+                              df_clean_type_line,
+                              df_clean_card_type], axis = 1).reset_index(drop = True)
+        
+        df_clean = df_clean.drop(["name", "mana_cost", 
+                                  "type_line", "card_type"], axis = 1)
+        
+        self.df = df_clean
+        
+    def pivot_longer_double_cards(self):
+        
+        df_clean = self.df_clean
+        
+        name_pivot_columns = sorted(
+            set([match[0] for match in df.columns.str.findall(
+                r"^card_name-\d+").values if match != []])
+            )
+        
+        df_clean = pd.wide_to_long(df_clean, name_pivot_columns, i = "id",
+                                   j = "card_sub", sep = "-")
+        
+        self.df = df_clean
 
     def process_data(self):
+        
         """Run the full processing pipeline"""
         if self.df is None:
             
@@ -224,16 +290,46 @@ class MTGDataProcessor:
         self.create_keyword_string()
         self.create_legalities()
         self.count_number_of_color_pips()
-        # self.double_cards()  # This needs completion
+        self.split_types()
+        self.pivot_longer_double_cards()
         
         return self.df
     
     # Add all your other methods as instance methods...
     
-    def save_data(self, file_name, raw_data=False):
+    def save_data(self, file_name, raw_data = False):
+        
         if self.df is None:
+            
             raise ValueError("No data to save.")
-        write_data_local(self.df, raw_data, file_name)
+            
+            
+        if raw_data == True:
+            
+            file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Raw Data File" + "\\" +
+                         file_name + ".csv")
+        
+        else:
+            
+            file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Processed Data File" + "\\" +
+                         file_name + ".csv")
+            
+        self.df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
+            
+        
+def write_data_local(df, raw_data, file_name):
+    
+    if raw_data == True:
+        
+        file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Raw Data File" + "\\" +
+                     file_name + ".csv")
+        
+    else:
+        
+        file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Processed Data File" + "\\" +
+                     file_name + ".csv")
+        
+    df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
         
 def get_url_data(url):
 
