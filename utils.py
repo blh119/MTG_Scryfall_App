@@ -54,48 +54,46 @@ class MTGDataProcessor:
         self.df = df_reduced_clean
         
     def is_color(self):
-        
-        df_reduced = self.df.copy()
+    
         df_clean = self.df.copy()
         
         for color, color_char in COLORS_DICT.items():
-            
+        
             if color in ["blue", "red", "white", "black", "green"]:
 
-                df_clean.loc[:, f"is_{color}"] = df_reduced["color_identity"].apply(
-                    
-                    lambda x: True if color_char in x else False
-                    
-                    )
-                
-                df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = np.nan
-                
-                df_clean[f"produced_{color}"] = df_reduced["produced_mana"].apply(
-                    
+            # Check if color is in color identity
+                df_clean.loc[:, f"is_{color}"] = df_clean["color_identity"].apply(
                     lambda x: color_char in x if isinstance(x, list) else False
-                    
+                ).astype("boolean") 
+            
+            # Handle NaN values for color identity
+                df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = pd.NA
+            
+            # Check if color mana is produced
+                df_clean[f"produced_{color}"] = df_clean["produced_mana"].apply(
+                lambda x: color_char in x if isinstance(x, list) else False
+                ).astype("boolean")
+            
+            # Handle NaN values for produced mana
+                df_clean.loc[df_clean["produced_mana"].isna(), f"produced_{color}"] = pd.NA
+            
+            else:  # This is for colorless
+            # Colorless cards have empty color identity
+                df_clean.loc[:, f"is_{color}"] = df_clean["color_identity"].apply(
+                    lambda x: len(x) == 0 if isinstance(x, list) else False
                     ).astype("boolean")
-                
-                df_clean.loc[df_clean["produced_mana"].isna(), f"produce_{color}"] = np.nan
-                
-            else:
-                
-                df_clean.loc[:, f"is_{color}"] = df_reduced["color_identity"].apply(
-                    
-                    lambda x: True if len(x) == 0 else False
-                    
-                    )
-                
-                df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = np.nan
-                
-                df_clean[f"produce_{color}"] = df_clean["produced_mana"].apply(
-                    
+            
+                # Handle NaN values for color identity
+                df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = pd.NA
+            
+                # Check if colorless mana is produced
+                df_clean[f"produced_{color}"] = df_clean["produced_mana"].apply(
                     lambda x: "C" in x if isinstance(x, list) else False
-                    
                     ).astype("boolean")
-                
-                df_clean.loc[df_clean["produced_mana"].isna(), f"produced_{color}"] = np.nan
-                
+            
+            # Handle NaN values for produced mana
+                df_clean.loc[df_clean["produced_mana"].isna(), f"produced_{color}"] = pd.NA
+            
         self.df = df_clean
         
     def is_in_format(self):
@@ -117,7 +115,7 @@ class MTGDataProcessor:
                 
                 ).astype("boolean")
             
-            df_clean[df_clean["games"].isna(), f"is_in_{current_game}"] = np.nan
+            df_clean.loc[df_clean["games"].isna(), f"is_in_{current_game}"] = pd.NA
             
         self.df = df_clean
         
@@ -125,7 +123,7 @@ class MTGDataProcessor:
         
         df_clean = self.df.copy()
         
-        for card_type in CARD_TYPES:
+        for card_type in self.card_types:
             
             has_card_type = df_clean["type_line"].str.contains(
                 
@@ -134,16 +132,16 @@ class MTGDataProcessor:
             )
             
             df_clean[f"is_{card_type}"] = False
-            df_clean[has_card_type, f"is_{card_type}"] = True
-            df_clean[df_clean["type_line"].isna(), f"is_{card_type}"] = np.nan
+            df_clean.loc[has_card_type, f"is_{card_type}"] = True
+            df_clean.loc[df_clean["type_line"].isna(), f"is_{card_type}"] = pd.NA
             
             df_clean[f"is_{card_type}"] = df_clean[f"is_{card_type}"].astype("boolean")
             
-            search_string = ""
+            search_string = f"{card_type} —"
             
             df_clean["type_line"] = df_clean["type_line"].apply(
                 
-                lambda x: re.sub(pattern = card_type, repl = "", )
+                lambda x: re.sub(pattern = search_string, repl = "", string = x)
                 
             )
 
@@ -154,29 +152,29 @@ class MTGDataProcessor:
         df_clean = self.df.copy()
         
         df_clean["keywords_string"] = df_clean["keywords"].apply(
-            lambda x: ", ".join(x) if isinstance(x, list) and len(x) > 0 else np.nan)
+            lambda x: ", ".join(x) if isinstance(x, list) and len(x) > 0 else pd.NA)
         
         self.df = df_clean
         
-    def create_legalities(df):  
+    def create_legalities(self):  
         
         df_clean = self.df.copy()
         
-        for game in GAME_FORMATS:
+        for game in self.game_formats:
             
-            game_string = "_".join(game, "legal")
+            game_string = "_".join([game, "legal"])
             
-            df[game_string] = False
+            df_clean[game_string] = False
             
-            df_clean[df_clean[game] == "legal", game_string] = True
-            df_clean[df_clean[game] == "not_legal", game_string] = True
-            df_clean[df_clean[game] == "banned", game_string] = True
+            df_clean.loc[df_clean[game] == "legal", game_string] = True
+            df_clean.loc[df_clean[game] == "not_legal", game_string] = True
+            df_clean.loc[df_clean[game] == "banned", game_string] = True
             
-            df_clean[df_clean[game].isna(), game_string] = np.nan
+            df_clean.loc[df_clean[game].isna(), game_string] = pd.NA
         
         self.df = df_clean
         
-    def count_number_of_color_pips(df):
+    def count_number_of_color_pips(self):
         
         df_output = self.df.copy()
         
@@ -184,7 +182,7 @@ class MTGDataProcessor:
         
         for color, color_char in self.color_pips_dict.items():
             
-            df_output[f"{color}_pips"] = df["mana_cost"].apply(lambda x: len(re.findall(re.escape(color_char), str(x))))
+            df_output[f"{color}_pips"] = df_output["mana_cost"].apply(lambda x: len(re.findall(re.escape(color_char), str(x))))
             
         df_output["generic_pips"] = df_output["mana_cost"].apply(lambda x: sum(int(d) for d in re.findall(r"\d+", str(x))))
         
@@ -192,20 +190,20 @@ class MTGDataProcessor:
             
             condlist = [df_output["mana_cost"].apply(lambda x: bool(re.search(r"X", str(x)))                                   ),
                         df_output["mana_cost"].isna()],
-            choicelist = [np.inf, np.nan],
+            choicelist = [np.inf, pd.NA],
             default = df_output["generic_pips"]
             
         )
         
         self.df = df_output
 
-    def get_number_of_splits(df, column_name):
+    def get_number_of_splits(self, df, column_name):
         
         df_clean = df.copy()
         
         df_clean["number_of_splits"] = df_clean[column_name].apply(
             
-            lambda x: len(re.findall(pattern = r"\\\\", string = x)),
+            lambda x: len(re.findall(pattern = r"//", string = str(x))),
             
             )
         
@@ -214,64 +212,36 @@ class MTGDataProcessor:
     def split_types(self):
         
         df_clean = self.df.copy()
-        
-        for card_type in self.card_types:
             
-            sub_pattern = f"{card_type} -"
+        colnames_to_split = ["card_name", "mana_cost", "type_line"]        
+        df_clean = df_clean.rename(columns = {"name" : "card_name"})
+        
+        for col_name in colnames_to_split:
             
-            df_clean["type_line"] = df_clean["type_line"].apply(
+            number_of_splits = self.get_number_of_splits(df_clean, col_name)
+            
+            number_of_splits_list = [f"{col_name}-{i}" for i in range(1, number_of_splits + 1)]
                 
-                lambda x: re.sub(pattern = sub_pattern, repl = "", count = 0, string = str(x))
-                
-                )
-        
-        name_number_of_splits = get_number_of_splits(df_clean, "name")
-        mana_cost_number_of_splits = get_number_of_splits(df_clean, "mana_cost")
-        type_line_number_of_splits = get_number_of_splits(df_clean, "type_line")
-        card_type_number_of_splits = get_number_of_splits(df_clean, "card_type")
-        
-        card_name_list = [f"card_name-{i}" for i in range(1, name_number_of_splits + 1)]
-        mana_cost_list = [f"mana_cost_{i}" for i in range(1, mana_cost_number_of_splits + 1)]
-        type_line_list = [f"type_line_{i}" for i in range(1, type_line_number_of_splits + 1)]
-        card_type_list = [f"card_type_{i}" for i in range(1, card_type_number_of_splits + 1)]
-        
-        # card_name df
-        df_clean_card_name = df_clean["name"].str.split("\\\\", expand = True)
-        df_clean_card_name.columns = card_type_list
-        
-        # mana cost df
-        df_clean_mana_cost = df_clean["mana_cost"].str.split("\\\\", expand = True)
-        df_clean_mana_cost.columns = mana_cost_list
-        
-        # type line list
-        df_clean_type_line = df_clean["type_line"].str_split("\\\\", expand = True)
-        df_clean_type_line.columns = type_line_list
-        
-        # card type list
-        df_clean_card_type = df_clean["card_type"].str.split("\\\\", expand = True)
-        df_clean_card_type.columns = card_type_list
-        
-        df_clean = pd.concat([df_clean,
-                              df_clean_card_name,
-                              df_clean_mana_cost, 
-                              df_clean_type_line,
-                              df_clean_card_type], axis = 1).reset_index(drop = True)
-        
-        df_clean = df_clean.drop(["name", "mana_cost", 
-                                  "type_line", "card_type"], axis = 1)
-        
+            df_clean_split = df_clean[col_name].str.split("//", expand = True)
+            df_clean_split.columns = number_of_splits_list
+            
+            df_clean = pd.concat([df_clean, df_clean_split], axis = 1).reset_index(drop = True)
+            
+        df_clean = df_clean.drop(colnames_to_split, axis = 1)
+            
         self.df = df_clean
         
     def pivot_longer_double_cards(self):
         
-        df_clean = self.df_clean
+        df_clean = self.df
         
-        name_pivot_columns = sorted(
-            set([match[0] for match in df.columns.str.findall(
-                r"^card_name-\d+").values if match != []])
-            )
+        pivot_columns = df_clean.columns[df_clean.columns.str.contains(
+            
+            "card_name-\d+|mana_cost-\d+|type_line-\d+")].tolist()
         
-        df_clean = pd.wide_to_long(df_clean, name_pivot_columns, i = "id",
+        pivot_columns = list(set([re.sub(pattern = r"-\d+", string = col, repl = "") for col in pivot_columns]))
+        
+        df_clean = pd.wide_to_long(df_clean, pivot_columns, i = "id",
                                    j = "card_sub", sep = "-")
         
         self.df = df_clean
@@ -284,14 +254,14 @@ class MTGDataProcessor:
             raise ValueError("No data loaded. Call load_data() first.")
         
         self.filter_tokens_and_basic_lands()
+        self.split_types()
+        self.pivot_longer_double_cards()
         self.is_color()
         self.is_in_format()
-        self.is_card_type()
+#        self.is_card_type()
         self.create_keyword_string()
         self.create_legalities()
         self.count_number_of_color_pips()
-        self.split_types()
-        self.pivot_longer_double_cards()
         
         return self.df
     
@@ -315,268 +285,6 @@ class MTGDataProcessor:
                          file_name + ".csv")
             
         self.df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
-            
-        
-def write_data_local(df, raw_data, file_name):
-    
-    if raw_data == True:
-        
-        file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Raw Data File" + "\\" +
-                     file_name + ".csv")
-        
-    else:
-        
-        file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Processed Data File" + "\\" +
-                     file_name + ".csv")
-        
-    df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
-        
-def get_url_data(url):
-
-  request_response = requests.get(url)
-
-  if request_response.status_code == 200:
-    return request_response.json()
-
-  else:
-    return request_response.status_code
-
-def json_to_dataframe(json_data):
-
-  if isinstance(json_data, list):
-    return pd.DataFrame(json_data)
-
-  elif isinstance(json_data, dict):
-    return pd.DataFrame([json_data])
-
-  else:
-    return pd.DataFrame([json_data])
-
-def get_requested_data(url):
-
-  return json_to_dataframe((get_url_data(url)))
-
-def filter_tokens_and_basic_lands(df):
-    
-    df_reduced = df[SELECTED_COLUMNS]
-
-    # Filter for English only cards and non tokens and filter out basic lands
-    df_reduced_clean = df_reduced.loc[(df_reduced.layout.isin(["normal", "adventure", "transform", "split",
-                                                               "modal_dfc", "planar", "reversilbe_card", "meld",
-                                                               "saga", "class", "case", "flip",
-                                                               "leveler", "prototype"])) &
-                                      ~(df_reduced.name.isin(["Forest", "Plains", "Swamp", "Island",
-                                                              "Mountain"])) &
-                                      ~(df_reduced.set_name.isin(NON_LEGAL_MAGIC_SETS))]
-    return df_reduced_clean
-
-def get_card_subtypes(df):
-    
-    df_clean = df.copy()
-    
-    # First, ensure split_columns has the correct number of columns
-    split_columns = df["type_line"].str.split("—", expand=True)
-    
-    # Check the number of columns in split_columns
-    split_columns.columns = ["card_type", "card_subtype1", "card_subtype2", "card_subtype3"]
-    
-    # Now assign the split columns to all_mjr_cards_data_clean only where is_land == 0
-    # Ensure the indexes align
-    for card_column in split_columns.columns:
-        df_clean[card_column] = split_columns[card_column].str.strip() # trim whitespace
-        
-    return df_clean
-
-def is_color(df):
-    
-    df_reduced = df.copy()
-    df_clean = df.copy()
-    
-    for color, color_char in COLORS_DICT.items():
-        
-        if color in ["blue", "red", "white", "black", "green"]:
-
-            df_clean.loc[:, f"is_{color}"] = df_reduced["color_identity"].apply(
-                
-                lambda x: True if color_char in x else False
-                
-                )
-            
-            df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = np.nan
-            
-            df_clean[f"produced_{color}"] = df_reduced["produced_mana"].apply(
-                
-                lambda x: color_char in x if isinstance(x, list) else False
-                
-                ).astype("boolean")
-            
-            df_clean.loc[df_clean["produced_mana"].isna(), f"produce_{color}"] = np.nan
-            
-        else:
-            
-            df_clean.loc[:, f"is_{color}"] = df_reduced["color_identity"].apply(
-                
-                lambda x: True if len(x) == 0 else False
-                
-                )
-            
-            df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = np.nan
-            
-            df_clean[f"produce_{color}"] = df_clean["produced_mana"].apply(
-                
-                lambda x: "C" in x if isinstance(x, list) else False
-                
-                ).astype("boolean")
-            
-            df_clean.loc[df_clean["produced_mana"].isna(), f"produced_{color}"] = np.nan
-            
-    return df_clean
-
-def is_in_format(df):
-    
-    df_clean = df.copy()
-    
-    df_clean = pd.concat([df_clean,
-                          (df_clean["legalities"].apply(pd.Series))],
-                           axis = 1,
-                           ignore_index = False).reset_index(drop = True)
-    
-    all_games = set([game for sublist in df_clean["games"] for game in sublist])
-    
-    for current_game in all_games:
-        
-        df_clean[f"is_in_{current_game}"] = df_clean["games"].apply(
-            
-            lambda x: current_game in x if isinstance(x, list) else False
-            
-            ).astype("boolean")
-        
-        df_clean[df_clean["games"].isna(), f"is_in{current_game}"] = np.nan
-        
-    return df_clean
-
-def is_card_type(df):
-    
-    df_clean = df.copy()
-    
-    for card_type in CARD_TYPES:
-        
-        has_card_type = df_clean["type_line"].str.contains(
-            
-            card_type, na = False, regex = True
-            
-        )
-        
-        df_clean[r"is_{card_type}"] = False
-        df_clean[has_card_type, r"is_{card_type}"] = True
-        df_clean[df_clean["type_line"].isna(), r"is_{card_type}"] = np.nan
-        
-        df_clean[f"is_{card_type}"] = df_clean[f"is_{card_type}"].astype("boolean")
-        
-        search_string = ""
-        
-        df_clean["type_line"] = df_clean["type_line"].apply(
-            
-            lambda x: re.sub(pattern = card_type, repl = "", )
-            
-        )
-
-    return df_clean
-
-def create_keyword_string(df):
-    
-    df["keywords_string"] = df["keywords"].apply( 
-        lambda x: ", ".join(x) if isinstance(x, list) and len(x) > 0 else np.nan)
-    
-    return(df)
-
-
-def create_legalities(df):  
-    
-    df_clean = df.copy()
-    
-    for game in GAME_FORMATS:
-        
-        game_string = "_".join(game, "legal")
-        
-        df[game_string] = False
-        
-        df_clean[df_clean[game] == "legal", game_string] = True
-        df_clean[df_clean[game] == "not_legal", game_string] = True
-        df_clean[df_clean[game] == "banned", game_string] = True
-        
-        df_clean[df_clean[game].isna(), game_string] = np.nan
-    
-    return df_clean
-
-def write_data_local(df, raw_data, file_name):
-    
-    if raw_data == True:
-        
-        file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Raw Data File" + "\\" +
-                     file_name + ".csv")
-        
-    else:
-        
-        file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Processed Data File" + "\\" +
-                     file_name + ".csv")
-        
-    df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
-    
-def count_number_of_color_pips(df):
-    
-    color_pips_dict = {"blue": "U",
-                       "red": "R",
-                       "white": "W",
-                       "black": "B",
-                       "green": "G",
-                       "colorless": "C"}
-    
-    df_output = df.copy()
-    
-    df_output["mana_cost"] = df_output["mana_cost"].apply(lambda x: re.sub(pattern = r"[{}]",  repl = "", string = str(x)))
-    
-    for color, color_char in color_pips_dict.items():
-        
-        df_output[f"{color}_pips"] = df["mana_cost"].apply(lambda x: len(re.findall(re.escape(color_char), str(x))))
-        
-    df_output["generic_pips"] = df_output["mana_cost"].apply(lambda x: sum(int(d) for d in re.findall(r"\d+", str(x))))
-    
-    df_output["generic_pips"] = np.select(
-        
-        condlist = [df_output["mana_cost"].apply(lambda x: bool(re.search(r"X", str(x)))                                   ),
-                    df_output["mana_cost"].isna()],
-        choicelist = [np.inf, np.nan],
-        default = df_output["generic_pips"]
-        
-    )
-    
-    return df_output
-
-def get_number_of_splits(df, column_name):
-    
-    df["number_of_splits"] = df[column_name].apply(
-        
-        lambda x: len(re.findall(pattern = r"\\\\", string = x)),
-        
-        )
-    
-    return max(df["number_of_splits"])
-
-def double_cards(df):
-    
-    df_clean = df.copy()
-    
-    name_number_of_splits = get_number_of_splits(df_clean, "name")
-    mana_cost_number_of_splits = get_number_of_splits(df_clean, "mana_cost")
-    type_line_number_of_splits = get_number_of_splits(df_clean, "type_line")
-    card_type_number_of_splits = get_number_of_splits(df_clean, "card_type")
-    
-    
-    
-    card_name_list = [f"card_name_{i}" for i in range(1, number_of_splits + 1)]
-
-    return df_clean
 
 def create_database(NEW_DB_NAME, server):
     
