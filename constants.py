@@ -20,9 +20,17 @@ CARD_LAYOUTS = ["normal", "adventure", "transform", "split",
                 "saga", "class", "case", "flip",
                 "leveler", "prototype"]
 
-CARD_TYPES = ["Land", "Legendary", "Artifact", "Enchantment", "Aura", "Battle",
+CARD_TYPES = ["Land", "Legendary", "Artifact", "Enchantment", "Battle",
               "Instant", "Sorcery", "Creature", "Planeswalker", "Vanguard",
               "Kindred"]
+
+CARD_SUBTYPES = ["Equipment", "Vehicle", "Powerstone", "Fortification", "Clue", 
+                 "Bobblehead", "Food", "Key", "Treasure", "Aura",
+                 "Saga", "Curse", "Room", "Background", "Class",
+                 "Case", "Rune", "Shrine", "Siege", "Arcane",
+                 "Trap", "Adventure", "Lesson", "Omen"]
+
+RARITY = ["common", "uncommon", "rare", "mythic", "special"]
 
 COLORS_DICT = {"blue": "U",
                "red": "R",
@@ -55,6 +63,22 @@ COLOR_PIPS_DICT = {"blue": "U",
                    "black": "B",
                    "green": "G",
                    "colorless": "C"}
+
+DROP_COLUMNS = ["artist", "cmc", "color_identity",
+                "games", "keywords", "lang",
+                "layout", "legalities", "loyalty",
+                "object", "printed_name", "produced_mana",
+                "rarity", "released_at", "set",
+                "set_id", "set_name", "set_type",
+                "mana_cost", "type_line", "standard", 
+                "future", "historic", "timeless", 
+                "gladiator", "pioneer", "explorer",
+                "modern", "legacy", "pauper", 
+                "vintage", "penny", "commander", 
+                "oathbreaker", "standardbrawl", "brawl", 
+                "alchemy", "paupercommander", "duel", 
+                "oldschool", "premodern", "predh",
+                "legal_sum", "card_type"]
 
 SCRYFALL_CARDS_URL = "https://data.scryfall.io/default-cards/default-cards-20250413212519.json"
 
