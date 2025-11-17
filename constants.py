@@ -81,9 +81,3 @@ DROP_COLUMNS = ["artist", "cmc", "color_identity",
                 "legal_sum", "card_type"]
 
 SCRYFALL_CARDS_URL = "https://data.scryfall.io/default-cards/default-cards-20250413212519.json"
-
-DB_HOST = "localhost"
-DB_PORT = "5433"
-DB_USER = "postgres"
-DB_PASSWORDS = pd.read_csv("C:\\Users\\holli\\OneDrive\\Documents\\MTG Scryfall App\Data\\DataBase Password.csv")
-

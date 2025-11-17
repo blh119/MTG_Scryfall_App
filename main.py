@@ -10,7 +10,12 @@ import numpy as np
 import json
 import re
 import logging
+import nltk
 import utils # utility functions from other script
+from gensim import Word2Vec
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
 # constants for main functon
 from constants import SELECTED_COLUMNS, BASIC_LAND_TYPES, CARD_LAYOUTS, CARD_TYPES, COLORS_DICT, COLORS, GAME_FORMATS, SCRYFALL_CARDS_URL, RARITY
 

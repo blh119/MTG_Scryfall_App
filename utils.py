@@ -296,6 +296,8 @@ class MTGDataProcessor:
         df_clean = pd.wide_to_long(df_clean, pivot_columns, i = "id", 
                                    j = "card_sub", sep = "-")
         
+        df_clean = df_clean.reset_index()
+        
         self.df = df_clean
         
     def drop_non_legal_cards(self):
@@ -323,7 +325,10 @@ class MTGDataProcessor:
         
         df_clean = self.df.copy()
         
-        df_clean = df_clean.groupby([])
+        df_clean = df_clean.groupby(["id", "card_name"]).head(1).reset_index()
+        
+        self.df = df_clean
+        
 
     def process_data(self):
         
@@ -345,7 +350,8 @@ class MTGDataProcessor:
         self.count_number_of_color_pips()
         self.create_subtype()
         self.drop_non_legal_cards()
-        # self.drop_unnecessary_columns()
+        self.drop_unnecessary_columns()
+        self.make_data_unique()
         print("Dataframe returned")
         
     # Add all your other methods as instance methods...
@@ -369,74 +375,94 @@ class MTGDataProcessor:
             
         self.df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
         
-class CardRecommendorModel():
+class CardRecommendorModel:
     
     def __init__(self, data_processor):
         
         self.data_processor = data_processor
+        self.stopwords = set(stopwords.words("english"))
+        nltk.download("punkt")
+        self.orcale_text_model = None 
+        self.keyword_text_model = None 
+        self.valid_game_format = None
+        self.initalize_game_format()
+            
+    def initalize_game_format(self):
         
         print("Welcome to the Magic the Gathering card recommender!\n\n")
         print("Which format will you be playing. Your choices are:")
         
-        for game_format in self.df.game_formats:
+        for game_format in self.data_processor.game_formats:
             
             print(game_format)
             
-        game_format = input()
+        self.get_game_format()
         
-    
-
-def create_database(NEW_DB_NAME, server):
-    
-    conn = psycopg2.connect(
+    def get_game_format(self):
         
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=get_db_password(server),
-            dbname="postgres"  # connect to default maintenance DB
-        )
-    
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)  # enable autocommit for DB creation
-        
-        # Create a cursor to execute SQL commands
-    cursor = conn.cursor()
-        
-    # Prevent SQL injection by using sql.Identifier
-    create_db_query = sql.SQL("CREATE DATABASE {}").format( 
-        sql.Identifier(NEW_DB_NAME)
-        )
-        
-    # Execute the database creation command
-    cursor.execute(create_db_query)
-    print(f"Database '{NEW_DB_NAME}' created successfully!")
-        
-    except psycopg2.Error as e:
-        
-        print(f"Error creating database: {e}")
-    
-    finally:
-        
-        # Close cursor and connection
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+        while True:
             
-def get_db_password(server):
+            if user_input in self.data_processor.game_formats:
+                
+                user_input = input().strip().lower()
+                self.valid_game_format = user_input
+                print(f"Game format set to: {self.valid_game_format}")
+                break          
+            
+            else: 
+                
+                print("Please choose valid game format")
+                
+                for game_format in self.data_processor.game_formats:
+                    print(game_format)
     
-    server_password = DB_PASSWORDS.loc[DB_PASSWORDS["database"] == server, "password"][0]
+    def legal_cards_for_format(self):
+        
+        self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_Legal"] == True]
     
-    return server_password
+    def tokenize_text(self):
+        
+        self.data_processor.df["orcale_text_tokens"] = self.data_processor.df["orcale_text"].apply(self.tokenize_words)
+        self.data_processor.df["keyword_string_tokens"] = self.data_processor.df["keyword_string"].apply(self.tokenize_words)
+        
+    def tokenize_words(self, text):
+        
+        if not text or pd.isna(text):
+            
+            return []
+        
+        else: 
+            
+            token = word_tokenize(text.lower()) 
+            filtered_token = [word for word in token if word not in self.stopwords] 
+            return filtered_token
+        
+    def trainWord2Vec_model(self):
 
-def create_cards_table(NEW_DB_NAME):
+        self.orcale_text_model = Word2Vec(sentences = self.data_processor.df["orcale_text_tokens"],
+                                          vector_size=100,
+                                          window=5, 
+                                          min_count=1, 
+                                          workers=4)
+        
+        self.keyword_text_model = Word2Vec(sentences = self.data_processor.df["keyword_string_tokens"],
+                                           vector_size=100,
+                                           window=5, 
+                                           min_count=1, 
+                                           workers=4)
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+                    
     
-    
-    
-
-
-
-
-
-
-
+                
+        
+ 
