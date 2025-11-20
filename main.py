@@ -12,9 +12,11 @@ import re
 import logging
 import nltk
 import utils # utility functions from other script
-from gensim import Word2Vec
+from gensim.models import Word2Vec
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+nltk.download("punkt_tab")
+nltk.download("punkt")
 
 # constants for main functon
 from constants import SELECTED_COLUMNS, BASIC_LAND_TYPES, CARD_LAYOUTS, CARD_TYPES, COLORS_DICT, COLORS, GAME_FORMATS, SCRYFALL_CARDS_URL, RARITY
@@ -37,6 +39,11 @@ processor = MTGDataProcessor(
 processor.load_data(SCRYFALL_CARDS_URL)
 processor.process_data()
 processor.save_data("clean scryfall cards")
+
+card_training_model = CardRecommendorModel(processor)
+card_training_model.legal_cards_for_format()
+card_training_model.tokenize_text()
+
 
 
 

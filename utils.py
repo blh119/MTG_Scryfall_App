@@ -381,16 +381,15 @@ class CardRecommendorModel:
         
         self.data_processor = data_processor
         self.stopwords = set(stopwords.words("english"))
-        nltk.download("punkt")
         self.orcale_text_model = None 
         self.keyword_text_model = None 
+        self.card_name_text_model = None
         self.valid_game_format = None
         self.initalize_game_format()
             
     def initalize_game_format(self):
         
         print("Welcome to the Magic the Gathering card recommender!\n\n")
-        print("Which format will you be playing. Your choices are:")
         
         for game_format in self.data_processor.game_formats:
             
@@ -402,28 +401,30 @@ class CardRecommendorModel:
         
         while True:
             
+            print("Which format will you be playing?")
+            user_input = input().strip().lower()
+        
             if user_input in self.data_processor.game_formats:
                 
-                user_input = input().strip().lower()
                 self.valid_game_format = user_input
                 print(f"Game format set to: {self.valid_game_format}")
                 break          
             
             else: 
                 
-                print("Please choose valid game format")
-                
+                print("Invalid format. Please choose from the following:")
                 for game_format in self.data_processor.game_formats:
-                    print(game_format)
-    
+                    print(f"- {game_format}")
+                    
     def legal_cards_for_format(self):
         
-        self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_Legal"] == True]
+        self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True]
     
     def tokenize_text(self):
         
-        self.data_processor.df["orcale_text_tokens"] = self.data_processor.df["orcale_text"].apply(self.tokenize_words)
-        self.data_processor.df["keyword_string_tokens"] = self.data_processor.df["keyword_string"].apply(self.tokenize_words)
+        self.data_processor.df["oracle_text_tokens"] = self.data_processor.df["oracle_text"].apply(self.tokenize_words)
+        self.data_processor.df["keywords_string_tokens"] = self.data_processor.df["keywords_string"].apply(self.tokenize_words)
+        self.data_processor.df["card_name_tokens"] = self.data_processor.df["card_name"].apply(self.tokenize_words)
         
     def tokenize_words(self, text):
         
@@ -439,17 +440,42 @@ class CardRecommendorModel:
         
     def trainWord2Vec_model(self):
 
-        self.orcale_text_model = Word2Vec(sentences = self.data_processor.df["orcale_text_tokens"],
-                                          vector_size=100,
-                                          window=5, 
-                                          min_count=1, 
-                                          workers=4)
+        self.orcale_text_model = Word2Vec(sentences = self.data_processor.df["oracle_text_tokens"],
+                                          vector_size = 200,
+                                          window = 5, 
+                                          min_count = 1, 
+                                          workers = 4)
         
-        self.keyword_text_model = Word2Vec(sentences = self.data_processor.df["keyword_string_tokens"],
-                                           vector_size=100,
-                                           window=5, 
-                                           min_count=1, 
-                                           workers=4)
+        self.keyword_text_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
+                                           vector_size = 100,
+                                           window = 5, 
+                                           min_count = 1, 
+                                           workers = 4)
+        
+        self.card_name_text_model = Word2Vec(sentences = self.data_processor.df["card_name_tokens"],
+                                             vector_size = 100,
+                                             window = 5, 
+                                             min_count = 1, 
+                                             workers = 4)
+        
+    def get_average_word_vector(self, model, text_vec):
+        
+        if text_vect == []:
+            
+            return np.zeros(model.vector_size)
+        
+        else: 
+            
+            word_vec = [word for word in text_vec if word in model.wv.key_to_index] 
+            
+            if word_vec:
+                
+                return np.mean(model.wv[word_vec], axis = 0)
+            
+            else:
+                
+                return np.zeros(model.vector_size)
+        
         
         
         
