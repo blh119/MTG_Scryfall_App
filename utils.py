@@ -441,7 +441,7 @@ class CardRecommendorModel:
     def trainWord2Vec_model(self):
 
         self.oracle_text_model = Word2Vec(sentences = self.data_processor.df["oracle_text_tokens"],
-                                          vector_size = 200,
+                                          vector_size = 100,
                                           window = 5, 
                                           min_count = 1, 
                                           workers = 4)
@@ -496,6 +496,19 @@ class CardRecommendorModel:
                 
                 return np.zeros(model.vector_size)
     
+    def get_model_inputs(self):
+        
+        is_color = [col for col in self.data_processor.df.columns if bool(re.search(pattern = "^is_.*", string = col)) and
+                    bool(re.search(pattern = r"blue$|red$|white$|black$|green$"))]
+        
+        produce_color = [col for col in self.data_processor.df.columns if bool(re.search(pattern = "^produce_")) and 
+                         bool(re.search(pattern = r"blue$|red$|white$|black$|green$"))]
+        
+        card_type
+        
+        
+        
+        
     
         
         
