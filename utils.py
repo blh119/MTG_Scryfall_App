@@ -440,42 +440,63 @@ class CardRecommendorModel:
         
     def trainWord2Vec_model(self):
 
-        self.orcale_text_model = Word2Vec(sentences = self.data_processor.df["oracle_text_tokens"],
+        self.oracle_text_model = Word2Vec(sentences = self.data_processor.df["oracle_text_tokens"],
                                           vector_size = 200,
                                           window = 5, 
                                           min_count = 1, 
                                           workers = 4)
         
-        self.keyword_text_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
-                                           vector_size = 100,
-                                           window = 5, 
-                                           min_count = 1, 
-                                           workers = 4)
+        self.keywords_string_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
+                                            vector_size = 100,
+                                            window = 5, 
+                                            min_count = 1, 
+                                            workers = 4)
         
-        self.card_name_text_model = Word2Vec(sentences = self.data_processor.df["card_name_tokens"],
+        self.card_name_model = Word2Vec(sentences = self.data_processor.df["card_name_tokens"],
                                              vector_size = 100,
                                              window = 5, 
                                              min_count = 1, 
                                              workers = 4)
         
+    def average_word_vector_to_df(self):
+        
+        self.data_processor.df["oracle_text_avg_vec"] = self.data_processor.df["oracle_text_tokens"].apply(
+            
+            lambda x: self.get_average_word_vector(self.oracle_text_model, x)
+            
+            )
+        
+        self.data_processor.df["keywords_string_avg_vec"] = self.data_processor.df["keywords_string_tokens"].apply(
+            
+            lambda x: self.get_average_word_vector(self.keywords_string_model, x)
+            
+            )
+        
+        self.data_processor.df["card_name_avg_vec"] = self.data_processor.df["card_name_tokens"].apply(
+            
+            lambda x: self.get_average_word_vector(self.card_name_model, x)
+            
+            )
+        
     def get_average_word_vector(self, model, text_vec):
         
-        if text_vect == []:
+        if text_vec == []:
             
             return np.zeros(model.vector_size)
         
         else: 
             
-            word_vec = [word for word in text_vec if word in model.wv.key_to_index] 
+            word_vec = [model.wv[word] for word in text_vec if word in model.wv.key_to_index] 
             
             if word_vec:
                 
-                return np.mean(model.wv[word_vec], axis = 0)
+                return np.mean(word_vec, axis = 0)
             
             else:
                 
                 return np.zeros(model.vector_size)
-        
+    
+    
         
         
         

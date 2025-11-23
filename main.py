@@ -38,13 +38,16 @@ processor = MTGDataProcessor(
 
 processor.load_data(SCRYFALL_CARDS_URL)
 processor.process_data()
-processor.save_data("clean scryfall cards")
+
 
 card_training_model = CardRecommendorModel(processor)
 card_training_model.legal_cards_for_format()
 card_training_model.tokenize_text()
+card_training_model.trainWord2Vec_model()
+card_training_model.average_word_vector_to_df()
 
+pd.to_csv()
 
-
+processor.df.to_csv("C:\\Users\\holli\\MTG Scryfall App\\mtg_processed_data.csv", sep = ",", encoding = "utf-8", index = False, header = True)
 
 
