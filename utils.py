@@ -232,21 +232,35 @@ class MTGDataProcessor:
         
         self.df = df_output
         
+    def extract_planeswalker_loyalty(self, value): 
+        
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            
+            return None
+
+        value = str(value)
+
+        match = re.search(r"(\d+|X)", value)
+        
+        if match:
+            
+            token = match.group(1)
+        
+        if token == "X":
+            
+            return np.inf
+        
+        else:
+
+            return int(token)
+
+        return None
+        
     def planeswalker_loyalty(self):
         
         df_clean = self.df.copy()
-        
-        df_clean["planeswalker_loyalty"] = df_clean["loyalty"].apply(
-            
-            lambda x: np.inf if bool(re.search(pattern = r"X", string = str(x))) else None
-            
-            ) 
-        
-        df_clean["planeswalker_loyalty"] = df_clean["loyalty"].apply(
-            
-            lambda x: int(re.search(r"(\d+)", str(x)).group(1)) if re.search(r"(\d+)", str(x)) else None
-            
-            )
+
+        df_clean["planeswalker_loyalty"] = df_clean["loyalty"].apply(self.extract_planeswalker_loyalty) 
         
         self.df = df_clean
 
@@ -258,7 +272,7 @@ class MTGDataProcessor:
             
             lambda x: len(re.findall(pattern = r"//", string = str(x))),
             
-            )
+        )
         
         return max(df_clean["number_of_splits"]) + 1
     
@@ -347,10 +361,10 @@ class MTGDataProcessor:
         self.get_rarity()
         self.create_keyword_string()
         self.create_legalities()
-        self.planeswalker_loyalty()
         self.count_number_of_color_pips()
         self.create_subtype()
         self.drop_non_legal_cards()
+        self.planeswalker_loyalty()
         self.drop_unnecessary_columns()
         self.make_data_unique()
         print("Dataframe returned")
@@ -445,19 +459,22 @@ class CardRecommendorModel:
                                           vector_size = 100,
                                           window = 5, 
                                           min_count = 1, 
-                                          workers = 4)
+                                          workers = 4,
+                                          seed = 99)
         
         self.keywords_string_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
-                                            vector_size = 100,
+                                            vector_size = 50,
                                             window = 5, 
                                             min_count = 1, 
-                                            workers = 4)
+                                            workers = 4,
+                                            seed = 99)
         
         self.card_name_model = Word2Vec(sentences = self.data_processor.df["card_name_tokens"],
-                                             vector_size = 100,
+                                             vector_size = 40,
                                              window = 5, 
                                              min_count = 1, 
-                                             workers = 4)
+                                             workers = 4,
+                                             seed = 99)
         
     def average_word_vector_to_df(self):
         
@@ -504,7 +521,7 @@ class CardRecommendorModel:
         produce_color = ["produced_" + color for color in list(self.data_processor.colors_dict)]
         color_pips = [color + "_pips" for color in list(self.data_processor.colors_dict)]
     
-        colors_cols = set(is_color + produce_color)
+        colors_cols = set(is_color + produce_color + color_pips)
         
         primary_card_type = ["is_" + card_type.lower() for card_type in self.data_processor.df.card_types]
         secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.df.card_subtype]
@@ -528,23 +545,33 @@ class CardRecommendorModel:
         self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
         
         self.raw_model_features = np.concatenate([self.color_features,
-                                                 self.primary_card_type_features,
-                                                 self.secondary_card_type_features,
-                                                 self.rarity_features,
-                                                 self.battle_features,
-                                                 self.oracle_features,
-                                                 self.keyword_features,
-                                                 self.card_name_features,
-                                                 axis = 1])
+                                                  
+                                                  self.primary_card_type_features,
+                                                  self.secondary_card_type_features,
+                                                  self.rarity_features,
+                                                  self.battle_features,
+                                                  self.oracle_features,
+                                                  self.keyword_features,
+                                                  self.card_name_features],
+                                                  axis = 1)
+        self.feature_names = (colors_cols + primary_card_type +
+                              secondary_card_type + rarity_type +
+                              battle_attributes_type +
+                              [f"ocacle_feature_{i}" for i in range(1, 101)] +
+                              [f"keyword_feature_{i}" for i in range(1, 51)] + 
+                              [f"card_name_feature{i}" for i in range(1, 51)])
         
-    def train_KKN_model(self):
+        
+    def train_KKN_model(self, neighbors = 10):
         
         self.scaler = StandardScaler()
         self.scaled_model_features = self.scaler.fit_transform(self.raw_model_features)
         
-        self.knn_model = NearestNeighbors(n_neighbors = len(self.data_processor.df.card_types), algorithm = "ball_tree").fit(self.scaled_model_features)
+        self.knn_model = NearestNeighbors(n_neighbors = 10, algorithm = "ball_tree").fit(self.scaled_model_features)
+    
         
-        distances, indices = self.knn_model.kneighbors(self.scaled_model_features)
+        
+        
         
         
         
