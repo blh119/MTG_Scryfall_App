@@ -64,6 +64,8 @@ COLOR_PIPS_DICT = {"blue": "U",
                    "green": "G",
                    "colorless": "C"}
 
+BATTLE_ATTRIBUTES = ["power", "toughness", "planeswalker_loyalty"]
+
 DROP_COLUMNS = ["artist", "cmc", "color_identity",
                 "games", "keywords", "lang",
                 "layout", "legalities", "loyalty",

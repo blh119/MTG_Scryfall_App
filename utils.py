@@ -8,7 +8,7 @@ class MTGDataProcessor:
     
     def __init__(self, selected_columns, colors_dict, card_types, card_subtypes,
                  game_formats, non_legal_sets, basic_lands, card_layout_keep,
-                 color_pips_dict, rarity, drop_columns):
+                 color_pips_dict, rarity, drop_columns, battle_attributes):
         
         self.selected_columns = selected_columns
         self.colors_dict = colors_dict
@@ -21,8 +21,9 @@ class MTGDataProcessor:
         self.color_pips_dict = color_pips_dict
         self.rarity = rarity
         self.drop_columns = drop_columns
+        self.battle_attributes = battle_attributes
         self.df = None
-    
+        
     def get_url_data(self, url):
 
         request_response = requests.get(url)
@@ -498,13 +499,38 @@ class CardRecommendorModel:
     
     def get_model_inputs(self):
         
-        is_color = [col for col in self.data_processor.df.columns if bool(re.search(pattern = "^is_.*", string = col)) and
-                    bool(re.search(pattern = r"blue$|red$|white$|black$|green$"))]
+        # color columns
+        is_color = ["is_" + color for color in list(self.data_processor.df.colors_dict)]
+        produce_color = ["produced_" + color for color in list(self.data_processor.colors_dict)]
+        color_pips = [color + "_pips" for color in list(self.data_processor.colors_dict)]
+    
+        colors_cols = set(is_color + produce_color)
         
-        produce_color = [col for col in self.data_processor.df.columns if bool(re.search(pattern = "^produce_")) and 
-                         bool(re.search(pattern = r"blue$|red$|white$|black$|green$"))]
+        primary_card_type = ["is_" + card_type.lower() for card_type in self.data_processor.df.card_types]
+        secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.df.card_subtype]
         
-        card_type
+        rarity_type = ["is_" + rarity.lower() for rarity in self.data_processor.rarity]
+        
+        battle_attributes_type = self.data_processor.battle_attributes
+        
+        colors_df = np.concatenate([self.data_processor.df[colors_cols].fillna(False).astype(int),
+                                    self.data_processor.df[color_pips].fillna(0)], axis = 1)
+        
+        self.color_features = colors_df
+        self.primary_card_type_features = self.data_processor.df[primary_card_type].fillna(False).astype(int).values
+        self.secondary_card_type_features = self.data_processor.df[secondary_card_type].fillna(False).astype(int).values
+        
+        self.rarity_features = self.data_processor.df[rarity_type].fillna(False).astype(int).values
+        self.battle_features = self.data_processor.df[battle_attributes_type].fillna(-1).values
+        
+        self.oracle_features = np.stack(self.data_processor.df["oracle_text_avg_vec"].values, axis = 0)
+        self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
+        self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
+        
+        
+        
+        
+        
         
         
         

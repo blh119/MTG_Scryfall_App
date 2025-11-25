@@ -15,11 +15,12 @@ import utils # utility functions from other script
 from gensim.models import Word2Vec
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from sklearn.preprocessing import StandardScaler
 nltk.download("punkt_tab")
 nltk.download("punkt")
 
 # constants for main functon
-from constants import SELECTED_COLUMNS, BASIC_LAND_TYPES, CARD_LAYOUTS, CARD_TYPES, COLORS_DICT, COLORS, GAME_FORMATS, SCRYFALL_CARDS_URL, RARITY
+from constants import SELECTED_COLUMNS, BASIC_LAND_TYPES, CARD_LAYOUTS, CARD_TYPES, COLORS_DICT, COLORS, GAME_FORMATS, SCRYFALL_CARDS_URL, RARITY, BATTLE_ATTRIBUTES
 
 processor = MTGDataProcessor(
     
@@ -33,7 +34,8 @@ processor = MTGDataProcessor(
     card_layout_keep = CARD_LAYOUT_KEEP,
     color_pips_dict = COLOR_PIPS_DICT,
     rarity = RARITY,
-    drop_columns = DROP_COLUMNS
+    drop_columns = DROP_COLUMNS,
+    battle_attributes = BATTLE_ATTRIBUTES
 )
 
 processor.load_data(SCRYFALL_CARDS_URL)
