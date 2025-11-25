@@ -527,6 +527,26 @@ class CardRecommendorModel:
         self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
         self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
         
+        self.raw_model_features = np.concatenate([self.color_features,
+                                                 self.primary_card_type_features,
+                                                 self.secondary_card_type_features,
+                                                 self.rarity_features,
+                                                 self.battle_features,
+                                                 self.oracle_features,
+                                                 self.keyword_features,
+                                                 self.card_name_features,
+                                                 axis = 1])
+        
+    def train_KKN_model(self):
+        
+        self.scaler = StandardScaler()
+        self.scaled_model_features = self.scaler.fit_transform(self.raw_model_features)
+        
+        self.knn_model = NearestNeighbors(n_neighbors = len(self.data_processor.df.card_types), algorithm = "ball_tree").fit(self.scaled_model_features)
+        
+        distances, indices = self.knn_model.kneighbors(self.scaled_model_features)
+        
+        
         
         
         
