@@ -46,6 +46,7 @@ card_training_model.legal_cards_for_format()
 card_training_model.tokenize_text()
 card_training_model.trainWord2Vec_model()
 card_training_model.average_word_vector_to_df()
+card_training_model.get_model_inputs()
 card_training_model.train_KKN_model()
 
 processor.df.to_csv("C:\\Users\\holli\\MTG Scryfall App\\mtg_processed_data.csv", sep = ",", encoding = "utf-8", index = False, header = True)

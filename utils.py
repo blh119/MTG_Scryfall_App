@@ -235,7 +235,7 @@ class MTGDataProcessor:
     def extract_planeswalker_loyalty(self, value): 
         
         if value is None or (isinstance(value, float) and np.isnan(value)):
-            
+        
             return None
 
         value = str(value)
@@ -517,35 +517,46 @@ class CardRecommendorModel:
     def get_model_inputs(self):
         
         # color columns
-        is_color = ["is_" + color for color in list(self.data_processor.df.colors_dict)]
+        is_color = ["is_" + color for color in list(self.data_processor.colors_dict)]
         produce_color = ["produced_" + color for color in list(self.data_processor.colors_dict)]
-        color_pips = [color + "_pips" for color in list(self.data_processor.colors_dict)]
-    
-        colors_cols = set(is_color + produce_color + color_pips)
         
-        primary_card_type = ["is_" + card_type.lower() for card_type in self.data_processor.df.card_types]
-        secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.df.card_subtype]
+        color_pips = [color + "_pips" for color in list(self.data_processor.colors_dict)]
+        
+        primary_card_type = ["is_" + card_type.lower() for card_type in self.data_processor.card_types]
+        secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.card_subtype]
         
         rarity_type = ["is_" + rarity.lower() for rarity in self.data_processor.rarity]
         
         battle_attributes_type = self.data_processor.battle_attributes
         
-        colors_df = np.concatenate([self.data_processor.df[colors_cols].fillna(False).astype(int),
-                                    self.data_processor.df[color_pips].fillna(0)], axis = 1)
+        color_type_features = is_color + produced_color
         
-        self.color_features = colors_df
+        self.color_type_features = self.data_processor.df[color_type_features].fillna(False).astype(int).values
+        
+        self.color_pips_features = self.data_processor.df[color_pips]
+        self.color_pips_features = np.nan_to_num(x = self.color_pips_features,
+                                                 nan = -1,
+                                                 posinf = 1e6,
+                                                 neginf = -1e6)
+        
         self.primary_card_type_features = self.data_processor.df[primary_card_type].fillna(False).astype(int).values
         self.secondary_card_type_features = self.data_processor.df[secondary_card_type].fillna(False).astype(int).values
         
         self.rarity_features = self.data_processor.df[rarity_type].fillna(False).astype(int).values
-        self.battle_features = self.data_processor.df[battle_attributes_type].fillna(-1).values
+        
+        self.battle_features = self.data_processor.df[battle_attributes_type].values
+        self.battle_features = np.nan_to_num(x = self.battle_features,
+                                             nan = -1,
+                                             posinf = 1e6,
+                                             neginf = -1e6)
+        
         
         self.oracle_features = np.stack(self.data_processor.df["oracle_text_avg_vec"].values, axis = 0)
         self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
         self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
         
-        self.raw_model_features = np.concatenate([self.color_features,
-                                                  
+        self.raw_model_features = np.concatenate([self.color_type_features,
+                                                  self.color_pips_features,
                                                   self.primary_card_type_features,
                                                   self.secondary_card_type_features,
                                                   self.rarity_features,
@@ -554,9 +565,10 @@ class CardRecommendorModel:
                                                   self.keyword_features,
                                                   self.card_name_features],
                                                   axis = 1)
-        self.feature_names = (colors_cols + primary_card_type +
-                              secondary_card_type + rarity_type +
-                              battle_attributes_type +
+        
+        self.feature_names = (color_type_features + color_pips_features +
+                              primary_card_type + secondary_card_type + 
+                              rarity_type + battle_attributes_type +
                               [f"ocacle_feature_{i}" for i in range(1, 101)] +
                               [f"keyword_feature_{i}" for i in range(1, 51)] + 
                               [f"card_name_feature{i}" for i in range(1, 51)])
