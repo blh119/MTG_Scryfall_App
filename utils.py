@@ -60,6 +60,32 @@ class MTGDataProcessor:
                                 (df_clean["digital"] == False)]
         self.df = df_clean
         
+    def clean_combat_stat(self, value):
+        
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            
+            return None
+        
+        inf_stat = bool(re.search(pattern = r"\*", string = value))
+        
+        if inf_stat:
+            
+            return np.inf
+        
+        else:
+            
+            return int(value)
+        
+        
+    def clean_power_and_toughness(self):
+        
+        df_clean = self.df.copy()
+        
+        df_clean["power"] = df_clean["power"].apply(self.clean_combat_stat)
+        df_clean["toughness"] = df_clean["toughness"].apply(self.clean_combat_stat)
+        
+        self.df = df_clean
+        
     def is_color(self):
     
         df_clean = self.df.copy()
@@ -118,6 +144,7 @@ class MTGDataProcessor:
             df_clean.loc[df_clean["games"].isna(), f"is_in_{current_game}"] = None
             
         self.df = df_clean
+        
     
     def is_card_type(self):
         
@@ -364,6 +391,7 @@ class MTGDataProcessor:
         self.count_number_of_color_pips()
         self.create_subtype()
         self.drop_non_legal_cards()
+        self.clean_power_and_toughness()
         self.planeswalker_loyalty()
         self.drop_unnecessary_columns()
         self.make_data_unique()
@@ -390,7 +418,7 @@ class MTGDataProcessor:
             
         self.df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
         
-class CardRecommendorModel:
+class CardRecommenderModel:
     
     def __init__(self, data_processor):
         
@@ -398,7 +426,6 @@ class CardRecommendorModel:
         self.stopwords = set(stopwords.words("english"))
         self.orcale_text_model = None 
         self.keyword_text_model = None 
-        self.card_name_text_model = None
         self.valid_game_format = None
         self.initalize_game_format()
             
@@ -518,12 +545,12 @@ class CardRecommendorModel:
         
         # color columns
         is_color = ["is_" + color for color in list(self.data_processor.colors_dict)]
-        produce_color = ["produced_" + color for color in list(self.data_processor.colors_dict)]
+        produced_color = ["produced_" + color for color in list(self.data_processor.colors_dict)]
         
         color_pips = [color + "_pips" for color in list(self.data_processor.colors_dict)]
         
         primary_card_type = ["is_" + card_type.lower() for card_type in self.data_processor.card_types]
-        secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.card_subtype]
+        secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.card_subtypes]
         
         rarity_type = ["is_" + rarity.lower() for rarity in self.data_processor.rarity]
         
@@ -539,6 +566,9 @@ class CardRecommendorModel:
                                                  posinf = 1e6,
                                                  neginf = -1e6)
         
+        self.color_features = np.hstack([self.color_type_features, 
+                                         self.color_pips_features])
+        
         self.primary_card_type_features = self.data_processor.df[primary_card_type].fillna(False).astype(int).values
         self.secondary_card_type_features = self.data_processor.df[secondary_card_type].fillna(False).astype(int).values
         
@@ -550,13 +580,11 @@ class CardRecommendorModel:
                                              posinf = 1e6,
                                              neginf = -1e6)
         
-        
         self.oracle_features = np.stack(self.data_processor.df["oracle_text_avg_vec"].values, axis = 0)
         self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
         self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
         
-        self.raw_model_features = np.concatenate([self.color_type_features,
-                                                  self.color_pips_features,
+        self.raw_model_features = np.concatenate([self.color_features,
                                                   self.primary_card_type_features,
                                                   self.secondary_card_type_features,
                                                   self.rarity_features,
@@ -566,20 +594,19 @@ class CardRecommendorModel:
                                                   self.card_name_features],
                                                   axis = 1)
         
-        self.feature_names = (color_type_features + color_pips_features +
+        self.feature_names = (color_type_features + color_pips +
                               primary_card_type + secondary_card_type + 
                               rarity_type + battle_attributes_type +
                               [f"ocacle_feature_{i}" for i in range(1, 101)] +
                               [f"keyword_feature_{i}" for i in range(1, 51)] + 
                               [f"card_name_feature{i}" for i in range(1, 51)])
         
-        
     def train_KKN_model(self, neighbors = 10):
         
         self.scaler = StandardScaler()
         self.scaled_model_features = self.scaler.fit_transform(self.raw_model_features)
         
-        self.knn_model = NearestNeighbors(n_neighbors = 10, algorithm = "ball_tree").fit(self.scaled_model_features)
+        self.knn_model = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.scaled_model_features)
     
         
         

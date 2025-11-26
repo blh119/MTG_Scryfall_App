@@ -40,8 +40,9 @@ processor = MTGDataProcessor(
 
 processor.load_data(SCRYFALL_CARDS_URL)
 processor.process_data()
+processor.save_data("clean_scryfall_data")
 
-card_training_model = CardRecommendorModel(processor)
+card_training_model = CardRecommenderModel(processor)
 card_training_model.legal_cards_for_format()
 card_training_model.tokenize_text()
 card_training_model.trainWord2Vec_model()
