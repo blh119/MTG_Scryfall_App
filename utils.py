@@ -257,6 +257,14 @@ class MTGDataProcessor:
             
         )
         
+        df_output["total_pips"] = (df_output["generic_pips"] +
+                                   df_output["blue_pips"] +
+                                   df_output["red_pips"] +
+                                   df_output["black_pips"] +
+                                   df_output["white_pips"] +
+                                   df_output["green_pips"] +
+                                   df_output["colorless_pips"])
+        
         self.df = df_output
         
     def extract_planeswalker_loyalty(self, value): 
@@ -467,6 +475,7 @@ class CardRecommenderModel:
         self.data_processor.df["oracle_text_tokens"] = self.data_processor.df["oracle_text"].apply(self.tokenize_words)
         self.data_processor.df["keywords_string_tokens"] = self.data_processor.df["keywords_string"].apply(self.tokenize_words)
         self.data_processor.df["card_name_tokens"] = self.data_processor.df["card_name"].apply(self.tokenize_words)
+        self.data_processor.df["card_subtype_tokens"] = self.data_processor.df["card_subtype"].apply(self.tokenize_words)
         
     def tokenize_words(self, text):
         
@@ -503,6 +512,13 @@ class CardRecommenderModel:
                                              workers = 4,
                                              seed = 99)
         
+        self.card_subtype_model = Word2Vec(sentences = self.data_processor.df["card_subtype_tokens"],
+                                           vector_size = 40,
+                                           window = 5,
+                                           min_count = 1,
+                                           workers = 4,
+                                           seed = 99)
+        
     def average_word_vector_to_df(self):
         
         self.data_processor.df["oracle_text_avg_vec"] = self.data_processor.df["oracle_text_tokens"].apply(
@@ -520,6 +536,12 @@ class CardRecommenderModel:
         self.data_processor.df["card_name_avg_vec"] = self.data_processor.df["card_name_tokens"].apply(
             
             lambda x: self.get_average_word_vector(self.card_name_model, x)
+            
+            )
+        
+        self.data_processor.df["card_subtype_avg_vec"] = self.data_processor.df["card_subtype_tokens"].apply(
+            
+            lambda x: self.get_average_word_vector(self.card_subtype_model, x)
             
             )
         
@@ -558,13 +580,17 @@ class CardRecommenderModel:
         
         color_type_features = is_color + produced_color
         
+        self.standardscaler = StandardScaler()
+        
         self.color_type_features = self.data_processor.df[color_type_features].fillna(False).astype(int).values
         
-        self.color_pips_features = self.data_processor.df[color_pips]
+        self.color_pips_features = self.data_processor.df[color_pips].fillna(0).values
         self.color_pips_features = np.nan_to_num(x = self.color_pips_features,
                                                  nan = -1,
                                                  posinf = 1e6,
                                                  neginf = -1e6)
+        
+        self.color_pips_features = self.standardscaler.fit_transform(self.color_pips_features)
         
         self.color_features = np.hstack([self.color_type_features, 
                                          self.color_pips_features])
@@ -580,34 +606,50 @@ class CardRecommenderModel:
                                              posinf = 1e6,
                                              neginf = -1e6)
         
+        self.battle_features = self.standardscaler.fit_transform(self.battle_features)
+        
+        # oracle_features
         self.oracle_features = np.stack(self.data_processor.df["oracle_text_avg_vec"].values, axis = 0)
+        self.oracle_features = self.standardscaler.fit_transform(self.oracle_features)
+        
+        # keyword features
         self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
+        self.keyword_features = self.standardscaler.fit_transform(self.keyword_features)
+        
+        # card name features
         self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
+        self.card_name_features = self.standardscaler.fit_transform(self.card_name_features)
         
-        self.scaler = MinMaxScaler(feature_range = (0, 1))
+        # card subtype features
+        self.card_subtype_features = np.stack(self.data_processor.df["card_subtype_avg_vec"].values, axis = 0)
+        self.card_subtype_features = self.standardscaler.fit_transform(self.card_subtype_features)
         
-        self.raw_model_features = np.concatenate([self.scaler(self.color_features) ,
-                                                  self.primary_card_type_features,
-                                                  self.secondary_card_type_features,
-                                                  self.rarity_features,
-                                                  self.battle_features,
-                                                  self.oracle_features,
-                                                  self.keyword_features,
-                                                  self.card_name_features],
-                                                  axis = 1)
+        self.binary_features = np.hstack([self.color_type_features,
+                                          self.primary_card_type_features,
+                                          self.secondary_card_type_features,
+                                          self.rarity_features])
         
+        self.numerical_features = np.hstack([self.color_pips_features, 
+                                             self.battle_features])
+        
+        self.scaled_model_features = np.concatenate([self.binary_features * .3,
+                                                     self.numerical_features * .15,
+                                                     self.oracle_features * .3,
+                                                     self.keyword_features * .12,
+                                                     self.card_subtype_features * .08,
+                                                     self.card_name_features * .05],
+                                                     axis = 1)
+        
+        '''
         self.feature_names = (color_type_features + color_pips +
                               primary_card_type + secondary_card_type + 
                               rarity_type + battle_attributes_type +
                               [f"ocacle_feature_{i}" for i in range(1, 101)] +
                               [f"keyword_feature_{i}" for i in range(1, 51)] + 
                               [f"card_name_feature_{i}" for i in range(1, 51)])
+        '''
         
     def train_KKN_model(self, neighbors = 6, n_features = 50):
-        
-        
-        self.scaler = StandardScaler()
-        self.scaled_model_features = self.scaler.fit_transform(self.raw_model_features)
         
         self.pca_model = PCA(n_components = n_features, random_state = 99)  # Reduce dimensions significantly
         self.scaled_model_features_pca = self.pca_model.fit_transform(self.scaled_model_features)
