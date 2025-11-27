@@ -72,7 +72,7 @@ DROP_COLUMNS = ["artist", "cmc", "color_identity",
                 "object", "printed_name", "produced_mana",
                 "rarity", "released_at", "set",
                 "set_id", "set_name", "set_type",
-                "mana_cost", "type_line", "standard", 
+                "standard", 
                 "future", "historic", "timeless", 
                 "gladiator", "pioneer", "explorer",
                 "modern", "legacy", "pauper", 
@@ -80,6 +80,6 @@ DROP_COLUMNS = ["artist", "cmc", "color_identity",
                 "oathbreaker", "standardbrawl", "brawl", 
                 "alchemy", "paupercommander", "duel", 
                 "oldschool", "premodern", "predh",
-                "legal_sum", "card_type"]
+                "legal_sum"]
 
 SCRYFALL_CARDS_URL = "https://data.scryfall.io/default-cards/default-cards-20250413212519.json"

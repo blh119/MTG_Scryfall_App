@@ -16,8 +16,8 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
-nltk.download('stopwords', force = True)
-nltk.download('punkt', force = True)
+nltk.download("stopwords", force = True)
+nltk.download("punkt", force = True)
 
 # constants for main functon
 from constants import SELECTED_COLUMNS, BASIC_LAND_TYPES, CARD_LAYOUTS, CARD_TYPES, COLORS_DICT, COLORS, GAME_FORMATS, SCRYFALL_CARDS_URL, RARITY, BATTLE_ATTRIBUTES
@@ -49,6 +49,7 @@ card_training_model.trainWord2Vec_model()
 card_training_model.average_word_vector_to_df()
 card_training_model.get_model_inputs()
 card_training_model.train_KKN_model()
+distances, indices = card_training_model.find_nearest_neighbor("Grave Pact")
 
 processor.df.to_csv("C:\\Users\\holli\\MTG Scryfall App\\mtg_processed_data.csv", sep = ",", encoding = "utf-8", index = False, header = True)
 

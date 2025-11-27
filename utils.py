@@ -367,7 +367,7 @@ class MTGDataProcessor:
         
         df_clean = self.df.copy()
         
-        df_clean = df_clean.groupby(["id", "card_name"]).head(1).reset_index()
+        df_clean = df_clean.groupby("card_name").head(1).reset_index(drop = True)
         
         self.df = df_clean
         
@@ -460,7 +460,7 @@ class CardRecommenderModel:
                     
     def legal_cards_for_format(self):
         
-        self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True]
+        self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True].reset_index(drop = True)
     
     def tokenize_text(self):
         
@@ -584,7 +584,9 @@ class CardRecommenderModel:
         self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
         self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
         
-        self.raw_model_features = np.concatenate([self.color_features,
+        self.scaler = MinMaxScaler(feature_range = (0, 1))
+        
+        self.raw_model_features = np.concatenate([self.scaler(self.color_features) ,
                                                   self.primary_card_type_features,
                                                   self.secondary_card_type_features,
                                                   self.rarity_features,
@@ -599,14 +601,54 @@ class CardRecommenderModel:
                               rarity_type + battle_attributes_type +
                               [f"ocacle_feature_{i}" for i in range(1, 101)] +
                               [f"keyword_feature_{i}" for i in range(1, 51)] + 
-                              [f"card_name_feature{i}" for i in range(1, 51)])
+                              [f"card_name_feature_{i}" for i in range(1, 51)])
         
-    def train_KKN_model(self, neighbors = 10):
+    def train_KKN_model(self, neighbors = 6, n_features = 50):
+        
         
         self.scaler = StandardScaler()
         self.scaled_model_features = self.scaler.fit_transform(self.raw_model_features)
         
-        self.knn_model = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.scaled_model_features)
+        self.pca_model = PCA(n_components = n_features, random_state = 99)  # Reduce dimensions significantly
+        self.scaled_model_features_pca = self.pca_model.fit_transform(self.scaled_model_features)
+        
+        self.knn_model = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.scaled_model_features_pca)
+        
+    def euclidean_distance(self, point1, point2): 
+        
+        return np.sqrt(np.sum((np.array(point1) - np.array(point2))**2))
+    
+    def find_nearest_neighbor(self, user_card_name):
+        
+        user_card_name = user_card_name.lower().strip()
+        
+        card_match = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name]
+        
+        if card_match.empty:
+            
+            print(f"{user_card_name} not found")
+            return None
+
+        input_card_index = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name].index[0]
+        input_card_features = self.scaled_model_features_pca[input_card_index].reshape(1, -1)
+        
+        distances, indices = self.knn_model.kneighbors(input_card_features)
+        
+        input_card_info = self.data_processor.df.iloc[input_card_index, :]
+        
+        print(f"\nInput Card: {input_card_info['card_name']}")
+        print(f"\nCard Type: {input_card_info['card_type']}")
+        print(f"\nMana Cost: {input_card_info.get('mana_cost', 'No Mana Cost')}")
+        print(f"\nOracle Text: {input_card_info.get('oracle_text', 'No Oracle Text')}")
+        print("\n" + "="*60)
+        print("RECOMMENDED CARDS")
+        
+        return distances, indices
+        
+        
+   
+    
+        
     
         
         
