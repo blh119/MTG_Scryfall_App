@@ -17,7 +17,7 @@ from nltk.tokenize import word_tokenize
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
 from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.manifold import TSNE
 nltk.download("stopwords", force = True)
 nltk.download("punkt", force = True)
 
@@ -51,14 +51,21 @@ card_training_model.trainWord2Vec_model()
 card_training_model.average_word_vector_to_df()
 card_training_model.get_model_inputs()
 card_training_model.train_KKN_model()
-distances1, indices1 = card_training_model.find_nearest_neighbor("Grave Pact")
-distances2, indices2 = card_training_model.find_nearest_neighbor("Dictate of Erebos")
-distances3, indices3 = card_training_model.find_nearest_neighbor("lightning Bolt")
-distances4, indices4 = card_training_model.find_nearest_neighbor("Disenchant")
-distances5, indices5 = card_training_model.find_nearest_neighbor("Elesh Norn, Mother of Machines")
-distances6, indices6 = card_training_model.find_nearest_neighbor("Gorion, Wise Mentor")
+
+card_training_model.find_nearest_neighbor("Grave Pact")
+card_training_model.find_nearest_neighbor("Dictate of Erebos")
+card_training_model.find_nearest_neighbor("lightning Bolt")
+card_training_model.find_nearest_neighbor("Disenchant")
+card_training_model.find_nearest_neighbor("Elesh Norn, Mother of Machines")
+card_training_model.find_nearest_neighbor("Brainstorm")
+card_training_model.find_nearest_neighbor("Ghostly Prison") 
+card_training_model.find_nearest_neighbor("Coastal Piracy")
+card_training_model.find_nearest_neighbor("Brainstorm")
+
 distances7, indices7 = card_training_model.find_nearest_neighbor("Counterspell")
 distances8, indices8 = card_training_model.find_nearest_neighbor("Murder")
+distances9, indices9 = card_training_model.find_nearest_neighbor("Elesh Norn, Grand Cenobite")
+distances10, indices10 = card_training_model.find_nearest_neighbor("Yawgmoth, Thran Physician")
 
 
 
