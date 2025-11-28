@@ -10,12 +10,15 @@ import numpy as np
 import json
 import re
 import nltk
+import matplotlib.pyplot as plt
+import seaborn as sns
 import utils # utility functions from other script
 from gensim.models import Word2Vec
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import NearestNeighbors 
+from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 nltk.download("stopwords", force = True)
@@ -62,12 +65,7 @@ card_training_model.find_nearest_neighbor("Ghostly Prison")
 card_training_model.find_nearest_neighbor("Coastal Piracy")
 card_training_model.find_nearest_neighbor("Brainstorm")
 
-distances7, indices7 = card_training_model.find_nearest_neighbor("Counterspell")
-distances8, indices8 = card_training_model.find_nearest_neighbor("Murder")
-distances9, indices9 = card_training_model.find_nearest_neighbor("Elesh Norn, Grand Cenobite")
-distances10, indices10 = card_training_model.find_nearest_neighbor("Yawgmoth, Thran Physician")
-
-
+card_training_model.tsne_data_visualization()
 
 
 

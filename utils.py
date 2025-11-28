@@ -696,7 +696,71 @@ class CardRecommenderModel:
             print(f"\nOracle Text: {index}: {row['oracle_text']}")
             print("\n" + "=" * 60)
             
-    def tsne_data_visualization(self):
+    def tsne_data_visualization(self, n_clusters = 8):
+        
+        self.kmeans_model = KMeans(n_clusters = n_clusters, random_state = 99)
+        
+        self.cluster_names = self.kmeans_model.fit_predict(self.scaled_model_features_pca)
+        
+        tsne = TSNE(n_components = 2, random_state = 99)
+        features = tsne.fit_transform(self.scaled_model_features_pca)
+        
+        plt.figure(figsize = (12, 8))
+        
+        self.tsne_scatter = plt.scatter(features[:, 0], features[:, 1],
+                                        c = self.cluster_names)
+        
+        plt.title("MTG Cards Clusters by K-Means")
+        plt.xlabel("t-SNE Component 1")
+        plt.ylabel("t-SNE Component 2")
+        plt.colorbar(self.tsne_scatter, label = "Cluster")
+        
+        # add a few card names to the plot
+        
+        sample_card_data = self.data_processor.df.sample(50, replace = False)
+        sample_card_indices = sample_card_data.index.tolist()
+        
+        for index in sample_card_indices:
+            
+            plt.annotate(self.data_processor.df.loc[index, "card_name"],
+                         (features[index, 0], features[index, 1]))
+            
+        plt.tight_layout()
+        plt.show()
+        
+        
+        
+    def analyze_clusters(self):
+        
+        self.data_processor.df["cluster"] = self.cluster_names
+        
+        self.card_type_by_cluster = self.data_processor.df.groupby("cluster").agg({
+            
+            "Card Type" : "sum",
+            "Card Subtype": "sum",
+            "Average Pips": "mean"
+            
+        })
+        
+        
+        
+        
+        
+        
+        
+        
+            
+            
+        
+        
+        
+        
+        
+ 
+        
+ 
+        
+        
         
         
    
