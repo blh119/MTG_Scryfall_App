@@ -682,10 +682,21 @@ class CardRecommenderModel:
         print(f"\nCard Type: {input_card_info['card_type']}")
         print(f"\nMana Cost: {input_card_info.get('mana_cost', 'No Mana Cost')}")
         print(f"\nOracle Text: {input_card_info.get('oracle_text', 'No Oracle Text')}")
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("RECOMMENDED CARDS")
         
-        return distances, indices
+        recommendations_data = self.data_processor.df.loc[indices[0], ].reset_index()
+        recommendations_data = recommendations_data.iloc[1: ]
+        
+        for index, row in recommendations_data.iterrows():
+            
+            print(f"\nRecommended Card {index}: {row['card_name']}")
+            print(f"\nCard Type {index}: {row['card_type']}")
+            print(f"\nMana Cost: {index}: {row['mana_cost']}")
+            print(f"\nOracle Text: {index}: {row['oracle_text']}")
+            print("\n" + "=" * 60)
+            
+    def tsne_data_visualization(self):
         
         
    
