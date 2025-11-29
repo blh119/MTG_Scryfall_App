@@ -695,15 +695,16 @@ class CardRecommenderModel:
             print(f"\nMana Cost: {index}: {row['mana_cost']}")
             print(f"\nOracle Text: {index}: {row['oracle_text']}")
             print("\n" + "=" * 60)
-            
-    def tsne_data_visualization(self, n_clusters = 8):
+        
+    def train_kmeans_model(self, n_clusters = 8):
         
         self.kmeans_model = KMeans(n_clusters = n_clusters, random_state = 99)
-        
         self.cluster_names = self.kmeans_model.fit_predict(self.scaled_model_features_pca)
+            
+    def tsne_data_visualization(self, n_components = 2):
         
-        tsne = TSNE(n_components = 2, random_state = 99)
-        features = tsne.fit_transform(self.scaled_model_features_pca)
+        self.tsne_model = TSNE(n_components = n_components, random_state = 99)
+        self.tsne_features = self.tsne_model.fit_transform(self.scaled_model_features_pca)
         
         plt.figure(figsize = (12, 8))
         
@@ -717,7 +718,7 @@ class CardRecommenderModel:
         
         # add a few card names to the plot
         
-        sample_card_data = self.data_processor.df.sample(50, replace = False)
+        sample_card_data = self.data_processor.df.sample(25, replace = False)
         sample_card_indices = sample_card_data.index.tolist()
         
         for index in sample_card_indices:
@@ -728,19 +729,24 @@ class CardRecommenderModel:
         plt.tight_layout()
         plt.show()
         
-        
-        
     def analyze_clusters(self):
         
         self.data_processor.df["cluster"] = self.cluster_names
         
         self.card_type_by_cluster = self.data_processor.df.groupby("cluster").agg({
             
-            "Card Type" : "sum",
-            "Card Subtype": "sum",
-            "Average Pips": "mean"
-            
+            "card_type" : "sum",
+            "card_subtype" : "sum",
+            "total_pips" : "mean",
+            "is_blue" : "sum",
+            "is_red" : "sum",
+            "is_black" : "sum",
+            "is_green" : "sum",
+            "is_white" : "sum",
+            "is_colorless" : "sum"
         })
+        
+    def train_Random_Forest_for_clusters
         
         
         
