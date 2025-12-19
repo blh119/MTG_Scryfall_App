@@ -894,7 +894,6 @@ class DataVisuals:
 
         fig.tight_layout()
         plt.show()
-<<<<<<< HEAD
            
 class CardRecommnderUserInterface:
     

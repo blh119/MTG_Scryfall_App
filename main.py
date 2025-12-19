@@ -5,11 +5,7 @@ Created on Thu Jul 10 22:27:39 2025
 @author: holli
 """
 import constants
-<<<<<<< HEAD
 from utils import MTGDataProcessor, CardRecommenderModel, DataVisuals, CardRecommnderUserInterface
-=======
-from utils import MTGDataProcessor, CardRecommenderModel, DataVisuals
->>>>>>> fcbc44c27ef949b890f0900ba02da08d04b296b9
 
 processor = MTGDataProcessor(
     
@@ -45,10 +41,4 @@ card_training_model.plot_color_by_cluster()
 
 card_training_model.tsne_data_visualization()
 card_training_model.random_forest_feature_importance_visualization()
-
-<<<<<<< HEAD
-
-
-=======
->>>>>>> fcbc44c27ef949b890f0900ba02da08d04b296b9
 
