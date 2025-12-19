@@ -4,6 +4,24 @@ Created on Thu Jun 26 23:14:41 2025
 
 @author: holli
 """
+import requests
+import pandas as pd
+import numpy as np
+import re
+import nltk
+import matplotlib.pyplot as plt
+from gensim.models import Word2Vec
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+nltk.download("stopwords", force = True)
+nltk.download("punkt", force = True)
+
 class MTGDataProcessor:
     
     def __init__(self, selected_columns, colors_dict, card_types, card_subtypes,
@@ -206,6 +224,11 @@ class MTGDataProcessor:
         
         df_clean["card_type"] = df_clean["card_type"].str.strip()
         df_clean["card_subtype"] = df_clean["card_subtype"].str.strip()
+
+        card_subtype_na_mask = df_clean["card_subtype"].isna()
+
+        # fill na card_subtype with the main card_type
+        df_clean["card_subtype"] = df_clean["card_subtype"].fillna(df_clean.loc[card_subtype_na_mask, "card_type"])
         
         self.df = df_clean
         
@@ -382,7 +405,6 @@ class MTGDataProcessor:
 
     def process_data(self):
         
-        """Run the full processing pipeline"""
         if self.df is None:
             
             raise ValueError("No data loaded. Call load_data() first.")
@@ -403,28 +425,6 @@ class MTGDataProcessor:
         self.planeswalker_loyalty()
         self.drop_unnecessary_columns()
         self.make_data_unique()
-        print("Dataframe returned")
-        
-    # Add all your other methods as instance methods...
-    
-    def save_data(self, file_name, raw_data = False):
-        
-        if self.df is None:
-            
-            raise ValueError("No data to save.")
-            
-            
-        if raw_data == True:
-            
-            file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Raw Data File" + "\\" +
-                         file_name + ".csv")
-        
-        else:
-            
-            file_path = ("C:\\Users\\holli\\Documents\\MTG Scryfall App\\Data\\Processed Data File" + "\\" +
-                         file_name + ".csv")
-            
-        self.df.to_csv(file_path, sep = ",", encoding = "utf-8", index = False, header = True)
         
 class CardRecommenderModel:
     
@@ -435,40 +435,17 @@ class CardRecommenderModel:
         self.orcale_text_model = None 
         self.keyword_text_model = None 
         self.valid_game_format = None
-        self.initalize_game_format()
-            
-    def initalize_game_format(self):
-        
-        print("Welcome to the Magic the Gathering card recommender!\n\n")
-        
-        for game_format in self.data_processor.game_formats:
-            
-            print(game_format)
-            
-        self.get_game_format()
-        
-    def get_game_format(self):
-        
-        while True:
-            
-            print("Which format will you be playing?")
-            user_input = input().strip().lower()
-        
-            if user_input in self.data_processor.game_formats:
-                
-                self.valid_game_format = user_input
-                print(f"Game format set to: {self.valid_game_format}")
-                break          
-            
-            else: 
-                
-                print("Invalid format. Please choose from the following:")
-                for game_format in self.data_processor.game_formats:
-                    print(f"- {game_format}")
                     
-    def legal_cards_for_format(self):
-        
-        self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True].reset_index(drop = True)
+    def legal_cards_for_format(self, game_format = "Commander"):
+
+        self.valid_game_format = game_format.strip().lower()
+
+        if self.valid_game_format in self.data_processor.game_formats:
+            
+            self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True].reset_index(drop = True)
+        else:
+
+            raise ValueError("Attempting to pass non-legal game format")
     
     def tokenize_text(self):
         
@@ -631,36 +608,42 @@ class CardRecommenderModel:
         
         self.numerical_features = np.hstack([self.color_pips_features, 
                                              self.battle_features])
+
+        self.model_features = np.concatenate([self.binary_features,
+                                              self.numerical_features,
+                                              self.oracle_features,
+                                              self.keyword_features,
+                                              self.card_subtype_features,
+                                              self.card_name_features],
+                                              axis = 1)
         
-        self.scaled_model_features = np.concatenate([self.binary_features * .3,
-                                                     self.numerical_features * .15,
+        self.scaled_model_features = np.concatenate([self.binary_features * .2,
+                                                     self.numerical_features * .1,
                                                      self.oracle_features * .3,
-                                                     self.keyword_features * .12,
-                                                     self.card_subtype_features * .08,
-                                                     self.card_name_features * .05],
+                                                     self.keyword_features * .1,
+                                                     self.card_subtype_features * .15,
+                                                     self.card_name_features * .15],
                                                      axis = 1)
         
-        '''
-        self.feature_names = (color_type_features + color_pips +
-                              primary_card_type + secondary_card_type + 
-                              rarity_type + battle_attributes_type +
+        self.feature_names = (color_type_features +  primary_card_type +
+                              secondary_card_type + rarity_type + 
+                              color_pips + battle_attributes_type +
                               [f"ocacle_feature_{i}" for i in range(1, 101)] +
                               [f"keyword_feature_{i}" for i in range(1, 51)] + 
-                              [f"card_name_feature_{i}" for i in range(1, 51)])
-        '''
+                              [f"card_subtype_features{i}" for i in range(1, 41)] +
+                              [f"card_name_feature_{i}" for i in range(1, 41)])
+
         
-    def train_KKN_model(self, neighbors = 6, n_features = 50):
+    def train_KNN_model(self, neighbors = 6, n_features = 50):
         
         self.pca_model = PCA(n_components = n_features, random_state = 99)  # Reduce dimensions significantly
         self.scaled_model_features_pca = self.pca_model.fit_transform(self.scaled_model_features)
+        self.unscaled_model_features_pca = self.pca_model.fit_transform(self.model_features)
         
-        self.knn_model = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.scaled_model_features_pca)
-        
-    def euclidean_distance(self, point1, point2): 
-        
-        return np.sqrt(np.sum((np.array(point1) - np.array(point2))**2))
+        self.knn_model_scaled = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.scaled_model_features_pca)
+        self.knn_model_unscaled = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.unscaled_model_features_pca)
     
-    def find_nearest_neighbor(self, user_card_name):
+    def find_nearest_neighbor_scaled(self, user_card_name):
         
         user_card_name = user_card_name.lower().strip()
         
@@ -674,7 +657,43 @@ class CardRecommenderModel:
         input_card_index = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name].index[0]
         input_card_features = self.scaled_model_features_pca[input_card_index].reshape(1, -1)
         
-        distances, indices = self.knn_model.kneighbors(input_card_features)
+        distances, indices = self.knn_model_scaled.kneighbors(input_card_features)
+        
+        input_card_info = self.data_processor.df.iloc[input_card_index, :]
+        
+        print(f"\nInput Card: {input_card_info['card_name']}")
+        print(f"\nCard Type: {input_card_info['card_type']}")
+        print(f"\nMana Cost: {input_card_info.get('mana_cost', 'No Mana Cost')}")
+        print(f"\nOracle Text: {input_card_info.get('oracle_text', 'No Oracle Text')}")
+        print("\n" + "=" * 60)
+        print("RECOMMENDED CARDS")
+        
+        recommendations_data = self.data_processor.df.loc[indices[0], ].reset_index()
+        recommendations_data = recommendations_data.iloc[1: ]
+        
+        for index, row in recommendations_data.iterrows():
+            
+            print(f"\nRecommended Card {index}: {row['card_name']}")
+            print(f"\nCard Type {index}: {row['card_type']}")
+            print(f"\nMana Cost: {index}: {row['mana_cost']}")
+            print(f"\nOracle Text: {index}: {row['oracle_text']}")
+            print("\n" + "=" * 60)
+
+    def find_nearest_neighbor_unscaled(self, user_card_name):
+        
+        user_card_name = user_card_name.lower().strip()
+        
+        card_match = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name]
+        
+        if card_match.empty:
+            
+            print(f"{user_card_name} not found")
+            return None
+
+        input_card_index = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name].index[0]
+        input_card_features = self.unscaled_model_features_pca[input_card_index].reshape(1, -1)
+        
+        distances, indices = self.knn_model_unscaled.kneighbors(input_card_features)
         
         input_card_info = self.data_processor.df.iloc[input_card_index, :]
         
@@ -699,60 +718,285 @@ class CardRecommenderModel:
     def train_kmeans_model(self, n_clusters = 8):
         
         self.kmeans_model = KMeans(n_clusters = n_clusters, random_state = 99)
-        self.cluster_names = self.kmeans_model.fit_predict(self.scaled_model_features_pca)
-            
-    def tsne_data_visualization(self, n_components = 2):
+        self.cluster_names = self.kmeans_model.fit_predict(self.unscaled_model_features_pca)
+        
+    def train_tsne(self, n_components = 2):
         
         self.tsne_model = TSNE(n_components = n_components, random_state = 99)
-        self.tsne_features = self.tsne_model.fit_transform(self.scaled_model_features_pca)
-        
-        plt.figure(figsize = (12, 8))
-        
-        self.tsne_scatter = plt.scatter(features[:, 0], features[:, 1],
-                                        c = self.cluster_names)
-        
-        plt.title("MTG Cards Clusters by K-Means")
-        plt.xlabel("t-SNE Component 1")
-        plt.ylabel("t-SNE Component 2")
-        plt.colorbar(self.tsne_scatter, label = "Cluster")
-        
-        # add a few card names to the plot
-        
-        sample_card_data = self.data_processor.df.sample(25, replace = False)
-        sample_card_indices = sample_card_data.index.tolist()
-        
-        for index in sample_card_indices:
-            
-            plt.annotate(self.data_processor.df.loc[index, "card_name"],
-                         (features[index, 0], features[index, 1]))
-            
-        plt.tight_layout()
-        plt.show()
+        self.tsne_features = self.tsne_model.fit_transform(self.unscaled_model_features_pca)
         
     def analyze_clusters(self):
         
         self.data_processor.df["cluster"] = self.cluster_names
         
-        self.card_type_by_cluster = self.data_processor.df.groupby("cluster").agg({
+        self.card_type_by_cluster = self.data_processor.df.groupby("cluster")["card_type"].value_counts().reset_index()
+        self.card_type_by_cluster = self.card_type_by_cluster.sort_values(by = ["cluster", "count"], ascending = [True, False])
+        self.card_type_by_cluster = self.card_type_by_cluster.groupby("cluster").head(5).reset_index(drop = True)
+        
+        self.card_subtype_by_cluster = self.data_processor.df.groupby("cluster")["card_subtype"].value_counts().reset_index()
+        self.card_subtype_by_cluster = self.card_subtype_by_cluster.sort_values(by = ["cluster", "count"], ascending = [True, False])
+        self.card_subtype_by_cluster = self.card_subtype_by_cluster.groupby("cluster").head(5).reset_index(drop = True)
+
+        self.color_by_cluster = self.data_processor.df.groupby("cluster").agg({
             
-            "card_type" : "sum",
-            "card_subtype" : "sum",
-            "total_pips" : "mean",
             "is_blue" : "sum",
             "is_red" : "sum",
             "is_black" : "sum",
             "is_green" : "sum",
             "is_white" : "sum",
             "is_colorless" : "sum"
-        })
+            
+        }).reset_index(drop = False)
+
+    def RandomForest_for_clusters(self):
+
+        X = self.model_features
+        y = self.cluster_names
+
+        self.rf_cluster_model = RandomForestClassifier(n_estimators = 100, random_state = 99)
+        self.rf_cluster_model.fit(X, y)
+
+    def train_models(self):
+
+        self.legal_cards_for_format()
+        self.tokenize_text()
+        self.trainWord2Vec_model()
+        self.average_word_vector_to_df()
+        self.get_model_inputs()
+        self.train_KNN_model()
+        self.train_kmeans_model()
+        self.RandomForest_for_clusters()
+
+class DataVisuals:
+    
+    def __int__(self, card_rec_model):
         
-    def train_Random_Forest_for_clusters
+        self.card_rec_model = card_rec_model
+        
+    def random_forest_feature_importance_visualization(self):
+
+        self.rf_cluster_model_feature_importance = self.card_rec_model.rf_cluster_model.feature_importances_
+
+        indices = np.argsort(self.rf_cluster_model_feature_importance)[::-1][:20]
+        plt.figure(figsize = (12, 6))
+        self.feature_importance_bar_graph = plt.barh(range(20), self.rf_cluster_model_feature_importance[indices])
+        plt.yticks(range(20), [self.feature_names[i] for i in indices])
+        plt.xlabel("Feature Importance")
+        plt.title("Feature Importance for Card Recommender Model")
+        plt.tight_layout()
+        plt.show()
+        
+    def tsne_data_visualization(self, n_components = 2):
+        
+        plt.figure(figsize = (12, 8))
+
+        for cluster in np.unique(self.card_rec_model.cluster_names):
+
+            cluster_mask = self.card_rec_model.cluster_names == cluster
+            
+            self.tsne_scatter = plt.scatter(self.card_rec_model.tsne_features[cluster_mask, 0], 
+                                            self.card_rec_model.tsne_features[cluster_mask, 1],
+                                            label = f"Cluster {cluster}")
+        
+        plt.title("MTG Cards Clusters by K-Means")
+        plt.xlabel("t-SNE Component 1")
+        plt.ylabel("t-SNE Component 2")
+        plt.legend()
+        
+        # add a few card names to the plot
+        sample_card_data = self.card_rec_model.data_processor.df.sample(25, replace = False)
+        sample_card_indices = sample_card_data.index.tolist()
+        
+        for index in sample_card_indices:
+            
+            plt.annotate(self.card_rec_model.data_processor.df.loc[index, "card_name"],
+                         (self.card_rec_model.tsne_features[index, 0], 
+                          self.card_rec_model.tsne_features[index, 1]))
+            
+        plt.tight_layout()
+        plt.show()
+
+    def plot_card_type_clusters(self):
+
+        cluster = 0
+
+        fig, axs = plt.subplots(2, 4, figsize = (15, 15))
+        fig.suptitle("Most Common Card Type by Cluster")
+
+        for i in range(2):
+            for j in range(4):
+
+                cluster_mask = self.card_type_by_cluster["cluster"] == cluster
+                cluster_values = self.card_type_by_cluster.loc[cluster_mask]
+            
+                axs[i, j].bar(cluster_values["card_type"], cluster_values["count"])
+                axs[i, j].set_title(f"Cluster {cluster} Most Common Card Type")
+                axs[i, j].set_xticklabels(cluster_values["card_type"], rotation = 90)
+                axs[i, j].set_ylabel("Count")
+
+                cluster = cluster + 1
+
+        fig.tight_layout()
+        plt.show()
+
+    def plot_card_subtype_clusters(self):
+
+        cluster = 0
+
+        fig, axs = plt.subplots(2, 4, figsize = (15, 15))
+        fig.suptitle("Most Common Card Subtype by Cluster")
+
+        for i in range(2):
+            for j in range(4):
+
+                cluster_mask = self.card_rec_model.card_subtype_by_cluster["cluster"] == cluster
+                cluster_values = self.card_rec_model.card_subtype_by_cluster.loc[cluster_mask]
+            
+                axs[i, j].bar(cluster_values["card_subtype"], cluster_values["count"])
+                axs[i, j].set_title(f"Cluster {cluster} Most Common Card Subtype")
+                axs[i, j].set_xticklabels(cluster_values["card_subtype"], rotation = 90)
+                axs[i, j].set_ylabel("Count")
+
+                cluster = cluster + 1
+
+        fig.tight_layout()
+        plt.show()
+
+    def plot_color_by_cluster(self):
+
+        cluster = 0
+
+        fig, axs = plt.subplots(2, 4, figsize = (15, 15))
+        fig.suptitle("Card Color by Cluster")
+
+        for i in range(2):
+            for j in range(4):
+
+                cluster_mask = self.card_rec_model.color_by_cluster["cluster"] == cluster
+                cluster_values = self.card_rec_model.color_by_cluster.loc[cluster_mask]
+
+                total_blue = cluster_values["is_blue"].sum()
+                total_red = cluster_values["is_red"].sum()
+                total_black = cluster_values["is_black"].sum()
+                total_white = cluster_values["is_white"].sum()
+                total_green = cluster_values["is_green"].sum()
+                total_colorless = cluster_values["is_colorless"].sum()
+
+                color_totals = np.array([total_blue, total_red, total_black, total_white, total_green, total_colorless])
+                color_names = np.array(["blue", "red", "black", "white", "green", "colorless"])
+                
+                axs[i, j].bar(color_names, color_totals)
+                axs[i, j].set_title(f"Cluster {cluster}: Most Common Color by Cluster")
+                axs[i, j].set_xticklabels(color_names, rotation = 90)
+                axs[i, j].set_ylabel("Count")
+
+                cluster = cluster + 1
+
+        fig.tight_layout()
+        plt.show()
+           
+class CardRecommnderUserInterface:
+    
+    def __init__(self, card_rec_model):
+        
+        self.card_rec_model = card_rec_model
+        self.welcome_message = """Welcome to the MTG Card Recommender!
+        
+        We are here to recommend the best replacement for a card that you give us!
+        
+        Would you like us to give you a recommendation?(Y/N) """
+        self.print_welcome_message()
+        
+        
+    def print_welcome_message(self):
+        
+        print(self.welcome_message)
+    
+    def card_recommendation_from_user(self):
+        
+        self.print_welcome_message()
+        
+        self.does_the_user_want_a_rec = input().lower().strip()
+        
+        if self.does_the_user_want_a_rec in ["y", "yes"]:
+            
+            self.card_rec_loop()
+        
+        elif self.does_the_user_want_a_rec in ["n", "no"]:
+            
+            print("Thanks for using our recommendation tool!")
+            print("Have a good day!")
+        
+        else:
+            
+            print(f"{self.does_the_user_want_a_rec} is not a valid response. Please enter: (Y/N)")
+        
+    def card_rec_loop(self):
+        
+        get_rec = True
+
+        while get_rec:
+            
+            print("\n" + "="*60)
+            print("Which card would you like a recommendation for?")
+            user_card = input().lower().strip()
+            
+            try:
+                
+                self.card_rec_model.find_nearest_neighbor_unscaled(user_card)
+            
+            except Exception as e:
+                
+                print(f"Error getting recommendation: {e}")
+                print("Please try another card.")
+                continue
+            
+            while True:
+                
+                print("\nWould you like another recommendation? (Y/N)")
+                self.does_the_user_want_a_rec = input().lower().strip()
+                
+                if self.does_the_user_want_a_rec in ["y", "yes"]:
+                    
+                    break # go back to the last loop
+                    
+                elif self.does_the_user_want_a_rec in ["n", "no"]:
+                    
+                    print("\n" + "="*60)
+                    print("Thanks for using our recommendation tool!")
+                    print("Have a good day!")
+                    
+                    get_rec = False
+                    
+                    break # break the loop
+                
+                else:
+                
+                    print(f"{self.does_the_user_want_a_rec} is not a valid response.")
+                    print("Please enter Y or N")
         
         
         
         
         
         
+    
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+                    
+    
+                
+        
+ 
         
         
             

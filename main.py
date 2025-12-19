@@ -4,71 +4,44 @@ Created on Thu Jul 10 22:27:39 2025
 
 @author: holli
 """
-import requests
-import pandas as pd
-import numpy as np
-import json
-import re
-import nltk
-import matplotlib.pyplot as plt
-import seaborn as sns
-import utils # utility functions from other script
-from gensim.models import Word2Vec
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors 
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-nltk.download("stopwords", force = True)
-nltk.download("punkt", force = True)
-
-# constants for main functon
-from constants import SELECTED_COLUMNS, BASIC_LAND_TYPES, CARD_LAYOUTS, CARD_TYPES, COLORS_DICT, COLORS, GAME_FORMATS, SCRYFALL_CARDS_URL, RARITY, BATTLE_ATTRIBUTES
+import constants
+from utils import MTGDataProcessor, CardRecommenderModel, DataVisuals, CardRecommnderUserInterface
 
 processor = MTGDataProcessor(
     
-    selected_columns = SELECTED_COLUMNS,
-    colors_dict = COLORS_DICT,
-    card_types = CARD_TYPES,
-    card_subtypes = CARD_SUBTYPES,
-    game_formats = GAME_FORMATS,
-    non_legal_sets = NON_LEGAL_MAGIC_SETS,
-    basic_lands = BASIC_LAND_TYPES,
-    card_layout_keep = CARD_LAYOUT_KEEP,
-    color_pips_dict = COLOR_PIPS_DICT,
-    rarity = RARITY,
-    drop_columns = DROP_COLUMNS,
-    battle_attributes = BATTLE_ATTRIBUTES
+    selected_columns = constants.SELECTED_COLUMNS,
+    colors_dict = constants.COLORS_DICT,
+    card_types = constants.CARD_TYPES,
+    card_subtypes = constants.CARD_SUBTYPES,
+    game_formats = constants.GAME_FORMATS,
+    non_legal_sets = constants.NON_LEGAL_MAGIC_SETS,
+    basic_lands = constants.BASIC_LAND_TYPES,
+    card_layout_keep = constants.CARD_LAYOUT_KEEP,
+    color_pips_dict = constants.COLOR_PIPS_DICT,
+    rarity = constants.RARITY,
+    drop_columns = constants.DROP_COLUMNS,
+    battle_attributes = constants.BATTLE_ATTRIBUTES
 )
 
-processor.load_data(SCRYFALL_CARDS_URL)
+processor.load_data(constants.SCRYFALL_CARDS_URL)
 processor.process_data()
-processor.save_data("clean_scryfall_data")
 
 card_training_model = CardRecommenderModel(processor)
-card_training_model.legal_cards_for_format()
-card_training_model.tokenize_text()
-card_training_model.trainWord2Vec_model()
-card_training_model.average_word_vector_to_df()
-card_training_model.get_model_inputs()
-card_training_model.train_KKN_model()
+card_training_model.train_models()
 
-card_training_model.find_nearest_neighbor("Grave Pact")
-card_training_model.find_nearest_neighbor("Dictate of Erebos")
-card_training_model.find_nearest_neighbor("lightning Bolt")
-card_training_model.find_nearest_neighbor("Disenchant")
-card_training_model.find_nearest_neighbor("Elesh Norn, Mother of Machines")
-card_training_model.find_nearest_neighbor("Brainstorm")
-card_training_model.find_nearest_neighbor("Ghostly Prison") 
-card_training_model.find_nearest_neighbor("Coastal Piracy")
-card_training_model.find_nearest_neighbor("Brainstorm")
+card_recommender_visuals = DataVisuals(card_training_model)
+
+
+
+card_training_model.analyze_clusters()
+
+card_training_model.plot_card_type_clusters()
+card_training_model.plot_card_subtype_clusters()
+card_training_model.plot_color_by_cluster()
 
 card_training_model.tsne_data_visualization()
+card_training_model.random_forest_feature_importance_visualization()
 
 
-
-processor.df.to_csv("C:\\Users\\holli\\MTG Scryfall App\\mtg_processed_data.csv", sep = ",", encoding = "utf-8", index = False, header = True)
 
 
