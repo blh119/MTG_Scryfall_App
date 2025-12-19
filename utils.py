@@ -4,6 +4,24 @@ Created on Thu Jun 26 23:14:41 2025
 
 @author: holli
 """
+import requests
+import pandas as pd
+import numpy as np
+import re
+import nltk
+import matplotlib.pyplot as plt
+from gensim.models import Word2Vec
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+nltk.download("stopwords", force = True)
+nltk.download("punkt", force = True)
+
 class MTGDataProcessor:
     
     def __init__(self, selected_columns, colors_dict, card_types, card_subtypes,
@@ -701,37 +719,11 @@ class CardRecommenderModel:
         
         self.kmeans_model = KMeans(n_clusters = n_clusters, random_state = 99)
         self.cluster_names = self.kmeans_model.fit_predict(self.unscaled_model_features_pca)
-            
-    def tsne_data_visualization(self, n_components = 2):
+        
+    def train_tsne(self, n_components = 2):
         
         self.tsne_model = TSNE(n_components = n_components, random_state = 99)
         self.tsne_features = self.tsne_model.fit_transform(self.unscaled_model_features_pca)
-        
-        plt.figure(figsize = (12, 8))
-
-        for cluster in np.unique(self.cluster_names):
-
-            cluster_mask = self.cluster_names == cluster
-            
-            self.tsne_scatter = plt.scatter(self.tsne_features[cluster_mask, 0], self.tsne_features[cluster_mask, 1],
-                                            label = f"Cluster {cluster}")
-        
-        plt.title("MTG Cards Clusters by K-Means")
-        plt.xlabel("t-SNE Component 1")
-        plt.ylabel("t-SNE Component 2")
-        plt.legend()
-        
-        # add a few card names to the plot
-        sample_card_data = self.data_processor.df.sample(25, replace = False)
-        sample_card_indices = sample_card_data.index.tolist()
-        
-        for index in sample_card_indices:
-            
-            plt.annotate(self.data_processor.df.loc[index, "card_name"],
-                         (self.tsne_features[index, 0], self.tsne_features[index, 1]))
-            
-        plt.tight_layout()
-        plt.show()
         
     def analyze_clusters(self):
         
@@ -756,7 +748,6 @@ class CardRecommenderModel:
             
         }).reset_index(drop = False)
 
-
     def RandomForest_for_clusters(self):
 
         X = self.model_features
@@ -765,9 +756,26 @@ class CardRecommenderModel:
         self.rf_cluster_model = RandomForestClassifier(n_estimators = 100, random_state = 99)
         self.rf_cluster_model.fit(X, y)
 
+    def train_models(self):
+
+        self.legal_cards_for_format()
+        self.tokenize_text()
+        self.trainWord2Vec_model()
+        self.average_word_vector_to_df()
+        self.get_model_inputs()
+        self.train_KNN_model()
+        self.train_kmeans_model()
+        self.RandomForest_for_clusters()
+
+class DataVisuals:
+    
+    def __int__(self, card_rec_model):
+        
+        self.card_rec_model = card_rec_model
+        
     def random_forest_feature_importance_visualization(self):
 
-        self.rf_cluster_model_feature_importance = self.rf_cluster_model.feature_importances_
+        self.rf_cluster_model_feature_importance = self.card_rec_model.rf_cluster_model.feature_importances_
 
         indices = np.argsort(self.rf_cluster_model_feature_importance)[::-1][:20]
         plt.figure(figsize = (12, 6))
@@ -775,6 +783,36 @@ class CardRecommenderModel:
         plt.yticks(range(20), [self.feature_names[i] for i in indices])
         plt.xlabel("Feature Importance")
         plt.title("Feature Importance for Card Recommender Model")
+        plt.tight_layout()
+        plt.show()
+        
+    def tsne_data_visualization(self, n_components = 2):
+        
+        plt.figure(figsize = (12, 8))
+
+        for cluster in np.unique(self.card_rec_model.cluster_names):
+
+            cluster_mask = self.card_rec_model.cluster_names == cluster
+            
+            self.tsne_scatter = plt.scatter(self.card_rec_model.tsne_features[cluster_mask, 0], 
+                                            self.card_rec_model.tsne_features[cluster_mask, 1],
+                                            label = f"Cluster {cluster}")
+        
+        plt.title("MTG Cards Clusters by K-Means")
+        plt.xlabel("t-SNE Component 1")
+        plt.ylabel("t-SNE Component 2")
+        plt.legend()
+        
+        # add a few card names to the plot
+        sample_card_data = self.card_rec_model.data_processor.df.sample(25, replace = False)
+        sample_card_indices = sample_card_data.index.tolist()
+        
+        for index in sample_card_indices:
+            
+            plt.annotate(self.card_rec_model.data_processor.df.loc[index, "card_name"],
+                         (self.card_rec_model.tsne_features[index, 0], 
+                          self.card_rec_model.tsne_features[index, 1]))
+            
         plt.tight_layout()
         plt.show()
 
@@ -800,7 +838,7 @@ class CardRecommenderModel:
 
         fig.tight_layout()
         plt.show()
-        
+
     def plot_card_subtype_clusters(self):
 
         cluster = 0
@@ -811,8 +849,8 @@ class CardRecommenderModel:
         for i in range(2):
             for j in range(4):
 
-                cluster_mask = self.card_subtype_by_cluster["cluster"] == cluster
-                cluster_values = self.card_subtype_by_cluster.loc[cluster_mask]
+                cluster_mask = self.card_rec_model.card_subtype_by_cluster["cluster"] == cluster
+                cluster_values = self.card_rec_model.card_subtype_by_cluster.loc[cluster_mask]
             
                 axs[i, j].bar(cluster_values["card_subtype"], cluster_values["count"])
                 axs[i, j].set_title(f"Cluster {cluster} Most Common Card Subtype")
@@ -834,8 +872,8 @@ class CardRecommenderModel:
         for i in range(2):
             for j in range(4):
 
-                cluster_mask = self.color_by_cluster["cluster"] == cluster
-                cluster_values = self.color_by_cluster.loc[cluster_mask]
+                cluster_mask = self.card_rec_model.color_by_cluster["cluster"] == cluster
+                cluster_values = self.card_rec_model.color_by_cluster.loc[cluster_mask]
 
                 total_blue = cluster_values["is_blue"].sum()
                 total_red = cluster_values["is_red"].sum()
@@ -856,18 +894,8 @@ class CardRecommenderModel:
 
         fig.tight_layout()
         plt.show()
-
-    def train_models(self):
-
-        self.legal_cards_for_format()
-        self.tokenize_text()
-        self.trainWord2Vec_model()
-        self.average_word_vector_to_df()
-        self.get_model_inputs()
-        self.train_KNN_model()
-        self.train_kmeans_model()
-        self.RandomForest_for_clusters()
         
+    
         
         
         
