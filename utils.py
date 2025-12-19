@@ -894,6 +894,7 @@ class DataVisuals:
 
         fig.tight_layout()
         plt.show()
+<<<<<<< HEAD
            
 class CardRecommnderUserInterface:
     
@@ -974,6 +975,10 @@ class CardRecommnderUserInterface:
                 
                     print(f"{self.does_the_user_want_a_rec} is not a valid response.")
                     print("Please enter Y or N")
+=======
+        
+    
+>>>>>>> fcbc44c27ef949b890f0900ba02da08d04b296b9
         
         
         
