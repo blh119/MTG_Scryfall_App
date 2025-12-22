@@ -11,7 +11,6 @@ import re
 import nltk
 import matplotlib.pyplot as plt
 from gensim.models import Word2Vec
-from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
@@ -428,10 +427,10 @@ class MTGDataProcessor:
         
 class CardRecommenderModel:
     
-    def __init__(self, data_processor):
+    def __init__(self, data_processor, stopwords):
         
         self.data_processor = data_processor
-        self.stopwords = set(stopwords.words("english"))
+        self.stopwords = stopwords
         self.orcale_text_model = None 
         self.keyword_text_model = None 
         self.valid_game_format = None
@@ -769,7 +768,7 @@ class CardRecommenderModel:
 
 class DataVisuals:
     
-    def __int__(self, card_rec_model):
+    def __init__(self, card_rec_model):
         
         self.card_rec_model = card_rec_model
         
@@ -826,8 +825,8 @@ class DataVisuals:
         for i in range(2):
             for j in range(4):
 
-                cluster_mask = self.card_type_by_cluster["cluster"] == cluster
-                cluster_values = self.card_type_by_cluster.loc[cluster_mask]
+                cluster_mask = self.card_rec_model.card_type_by_cluster["cluster"] == cluster
+                cluster_values = self.card_rec_model.card_type_by_cluster.loc[cluster_mask]
             
                 axs[i, j].bar(cluster_values["card_type"], cluster_values["count"])
                 axs[i, j].set_title(f"Cluster {cluster} Most Common Card Type")
@@ -974,11 +973,6 @@ class CardRecommnderUserInterface:
                 
                     print(f"{self.does_the_user_want_a_rec} is not a valid response.")
                     print("Please enter Y or N")
-=======
-        
-    
->>>>>>> fcbc44c27ef949b890f0900ba02da08d04b296b9
-        
         
         
         

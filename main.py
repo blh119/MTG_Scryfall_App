@@ -23,22 +23,23 @@ processor = MTGDataProcessor(
     battle_attributes = constants.BATTLE_ATTRIBUTES
 )
 
+# Data Cleaners
 processor.load_data(constants.SCRYFALL_CARDS_URL)
 processor.process_data()
 
-card_training_model = CardRecommenderModel(processor)
+# Train Models
+card_training_model = CardRecommenderModel(processor, constants.STOPWORDS)
 card_training_model.train_models()
-
-card_recommender_visuals = DataVisuals(card_training_model)
-
-
-
 card_training_model.analyze_clusters()
 
-card_training_model.plot_card_type_clusters()
-card_training_model.plot_card_subtype_clusters()
-card_training_model.plot_color_by_cluster()
+# Data Visuals
+card_recommender_visuals = DataVisuals(card_training_model)
+card_recommender_visuals.plot_card_type_clusters()
+card_recommender_visuals.plot_card_subtype_clusters()
+card_recommender_visuals.plot_color_by_cluster()
+card_recommender_visuals.tsne_data_visualization()
+card_recommender_visuals.random_forest_feature_importance_visualization()
 
-card_training_model.tsne_data_visualization()
-card_training_model.random_forest_feature_importance_visualization()
+card_recommender_user_interface = CardRecommnderUserInterface(card_training_model)
+card_recommender_user_interface.card_recommendation_from_user()
 
