@@ -11,8 +11,6 @@ processor = MTGDataProcessor(
     
     selected_columns = constants.SELECTED_COLUMNS,
     colors_dict = constants.COLORS_DICT,
-    card_types = constants.CARD_TYPES,
-    card_subtypes = constants.CARD_SUBTYPES,
     game_formats = constants.GAME_FORMATS,
     non_legal_sets = constants.NON_LEGAL_MAGIC_SETS,
     basic_lands = constants.BASIC_LAND_TYPES,
@@ -20,7 +18,19 @@ processor = MTGDataProcessor(
     color_pips_dict = constants.COLOR_PIPS_DICT,
     rarity = constants.RARITY,
     drop_columns = constants.DROP_COLUMNS,
-    battle_attributes = constants.BATTLE_ATTRIBUTES
+    battle_attributes = constants.BATTLE_ATTRIBUTES,
+    scryfall_supertypes_url = constants.SCRYFALL_SUPERTYPES_URL,
+    scryfall_card_types_url = constants.SCRYFALL_CARD_TYPES_URL,
+    scryfall_artifact_types_url = constants.SCRYFALL_ARTIFACT_TYPES_URL,
+    scryfall_creature_types_url = constants.SCRYFALL_CREATURE_TYPES_URL,
+    scryfall_enchantment_types_url = constants.SCRYFALL_ENCHANTMENT_TYPES_URL,
+    scryfall_land_types_url = constants.SCRYFALL_LAND_TYPES_URL,
+    scryfall_planeswalker_types_url = constants.SCRYFALL_PLANESWALKER_TYPES_URL,
+    scryfall_spell_types_url = constants.SCRYFALL_SPELL_TYPES_URL,
+    scryfall_keyword_abilities_url = constants.SCRYFALL_KEYWORD_ABILITIES_URL,
+    scryfall_keyword_actions_url = constants.SCRYFALL_KEYWORD_ACTIONS_URL,
+    scryfall_ability_words_url = constants.SCRYFALL_ABILITY_WORDS_URL
+    
 )
 
 # Data Cleaners

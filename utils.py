@@ -23,14 +23,15 @@ nltk.download("punkt", force = True)
 
 class MTGDataProcessor:
     
-    def __init__(self, selected_columns, colors_dict, card_types, card_subtypes,
-                 game_formats, non_legal_sets, basic_lands, card_layout_keep,
-                 color_pips_dict, rarity, drop_columns, battle_attributes):
+    def __init__(self, selected_columns, colors_dict, game_formats,
+                 non_legal_sets, basic_lands, card_layout_keep, color_pips_dict, 
+                 rarity, drop_columns, battle_attributes, scryfall_supertypes_url,
+                 scryfall_supertypes_url, scryfall_card_types_url, scryfall_artifact_types_url, scryfall_creature_types_url,
+                 scryfall_enchantment_types_url, scryfall_land_types_url, scryfall_planeswalker_types_url, scryfall_planeswalker_types_url,
+                 scryfall_spell_types_url, scryfall_keyword_abilities_url, scryfall_keyword_actions_url, scryfall_ability_words_url):
         
         self.selected_columns = selected_columns
         self.colors_dict = colors_dict
-        self.card_types = card_types
-        self.card_subtypes = card_subtypes
         self.game_formats = game_formats
         self.non_legal_sets = non_legal_sets
         self.basic_lands = basic_lands
@@ -39,31 +40,88 @@ class MTGDataProcessor:
         self.rarity = rarity
         self.drop_columns = drop_columns
         self.battle_attributes = battle_attributes
+        self.scryfall_urls = {"supertypes" : scryfall_supertypes_url,
+                              "card_types" : scryfall_card_types_url,
+                              "artifact_types" : scryfall_artifact_types_url,
+                              "creature_types" : scryfall_creature_types_url,
+                              "enchantment_types" : scryfall_enchantment_types_url,
+                              "land_types" : scryfall_land_types_url,
+                              "planeswalker_types" : scryfall_planeswalker_types_url,
+                              "spell_types" : scryfall_spell_types_url,
+                              "keyword_abilities" : scryfall_keyword_abilities_url,
+                              "keyword_actions" : scryfall_keyword_actions_url,
+                              "ability_words" : scryfall_ability_words_url}
+        self.scryfall_features_lists = {}
+        
         self.df = None
         
     def get_url_data(self, url):
 
         request_response = requests.get(url)
+        
         if request_response.status_code == 200:
+            
             return request_response.json()
+        
         else:
+            
             return request_response.status_code
     
     def json_to_dataframe(self, json_data):
         
         if isinstance(json_data, list):
+            
             return pd.DataFrame(json_data)
+        
         elif isinstance(json_data, dict):
+            
             return pd.DataFrame([json_data])
+        
         else:
+            
             return pd.DataFrame([json_data])
     
-    def load_data(self, url):
+    def load_data(self, url, to_list = False, to_dataframe = False):
         
-        json_data = self.get_url_data(url)
-        self.df = self.json_to_dataframe(json_data)
+        if to_dataframe and to_list == False:
+            
+            json_data = self.get_url_data(url) 
+            return self.json_to_dataframe(json_data)
         
-    
+        elif to_dataframe == False and to_list:
+            
+            json_data = self.get_url_data(url)
+            return self.json_to_list(json_data)
+        
+        elif to_dataframe and to_list:
+            
+            raise ValueError("Must either specify to_dataframe == False or to_list == False.\nOne must be true, while the other is false")
+            
+        else:
+            
+            raise ValueError("Must specify to_dataframe == True or to_list == True.\nOne must be true, while the other is false")
+            
+    def json_to_list(self, json_data):
+        
+        if isinstance(json_data, list):
+            
+            return [json_data]
+        
+        elif isinstance(json_data, dict):
+            
+            return json_data["data"]
+        
+        else:
+            
+            return [json_data]
+        
+    def get_scryfall_lists(self):
+        
+        for feature_type, url in self.scryfall_urls.items():
+            
+            current_list = self.load_data(url, to_list = True)
+            self.scryfall_features_lists[feature_type] = current_list
+            
     def filter_tokens_and_basic_lands(self):
         
         df_clean = self.df.copy()

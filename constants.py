@@ -150,6 +150,6 @@ SCRYFALL_PLANESWALKER_TYPES_URL = "https://api.scryfall.com/catalog/planeswalker
 SCRYFALL_SPELL_TYPES_URL = "https://api.scryfall.com/catalog/spell-types"
 SCRYFALL_KEYWORD_ABILITIES_URL = "https://api.scryfall.com/catalog/keyword-abilities"
 SCRYFALL_KEYWORD_ACTIONS_URL = "https://api.scryfall.com/catalog/keyword-actions"
-SCRYFALL_ABILITY_WORD_URL = "https://api.scryfall.com/catalog/ability-words"
+SCRYFALL_ABILITY_WORDS_URL = "https://api.scryfall.com/catalog/ability-words"
 
 
