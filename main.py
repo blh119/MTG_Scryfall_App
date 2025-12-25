@@ -29,12 +29,13 @@ processor = MTGDataProcessor(
     scryfall_spell_types_url = constants.SCRYFALL_SPELL_TYPES_URL,
     scryfall_keyword_abilities_url = constants.SCRYFALL_KEYWORD_ABILITIES_URL,
     scryfall_keyword_actions_url = constants.SCRYFALL_KEYWORD_ACTIONS_URL,
-    scryfall_ability_words_url = constants.SCRYFALL_ABILITY_WORDS_URL
+    scryfall_ability_words_url = constants.SCRYFALL_ABILITY_WORDS_URL,
+    scryfall_cards_url = constants.SCRYFALL_CARDS_URL
     
 )
 
 # Data Cleaners
-processor.load_data(constants.SCRYFALL_CARDS_URL)
+processor.load_data(constants.SCRYFALL_CARDS_URL, to_dataframe = True)
 processor.process_data()
 
 # Train Models

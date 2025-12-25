@@ -25,10 +25,10 @@ class MTGDataProcessor:
     
     def __init__(self, selected_columns, colors_dict, game_formats,
                  non_legal_sets, basic_lands, card_layout_keep, color_pips_dict, 
-                 rarity, drop_columns, battle_attributes, scryfall_supertypes_url,
-                 scryfall_supertypes_url, scryfall_card_types_url, scryfall_artifact_types_url, scryfall_creature_types_url,
-                 scryfall_enchantment_types_url, scryfall_land_types_url, scryfall_planeswalker_types_url, scryfall_planeswalker_types_url,
-                 scryfall_spell_types_url, scryfall_keyword_abilities_url, scryfall_keyword_actions_url, scryfall_ability_words_url):
+                 rarity, drop_columns, battle_attributes, scryfall_supertypes_url,scryfall_card_types_url, scryfall_artifact_types_url, scryfall_creature_types_url,
+                 scryfall_enchantment_types_url, scryfall_land_types_url, scryfall_planeswalker_types_url,
+                 scryfall_spell_types_url, scryfall_keyword_abilities_url, scryfall_keyword_actions_url, scryfall_ability_words_url,
+                 scryfall_cards_url):
         
         self.selected_columns = selected_columns
         self.colors_dict = colors_dict
@@ -40,6 +40,7 @@ class MTGDataProcessor:
         self.rarity = rarity
         self.drop_columns = drop_columns
         self.battle_attributes = battle_attributes
+        self.scryfall_cards_url = scryfall_cards_url
         self.scryfall_urls = {"supertypes" : scryfall_supertypes_url,
                               "card_types" : scryfall_card_types_url,
                               "artifact_types" : scryfall_artifact_types_url,
@@ -114,89 +115,89 @@ class MTGDataProcessor:
         else:
             
             return [json_data]
+    
+    def get_scryfall_cards(self):
+        
+        self.df = self.load_data(self.scryfall_cards_url, to_dataframe = True)
         
     def get_scryfall_lists(self):
         
         for feature_type, url in self.scryfall_urls.items():
-            
             current_list = self.load_data(url, to_list = True)
             self.scryfall_features_lists[feature_type] = current_list
             
     def filter_tokens_and_basic_lands(self):
         
-        df_clean = self.df.copy()
-        
-        df_clean = df_clean[self.selected_columns]
+        self.df = self.df.loc[:, self.selected_columns]
 
         # Filter for English only cards and non tokens and digital only and filter out basic lands
-        df_clean = df_clean.loc[(df_clean.layout.isin(self.card_layout_keep)) &
-                                ~(df_clean.name.isin(self.basic_lands)) &
-                                ~(df_clean.set_name.isin(self.non_legal_sets)) &
-                                (df_clean["digital"] == False)]
-        self.df = df_clean
-        
-    def clean_combat_stat(self, value):
-        
-        if value is None or (isinstance(value, float) and np.isnan(value)):
-            
-            return None
-        
-        inf_stat = bool(re.search(pattern = r"\*", string = value))
-        
-        if inf_stat:
-            
-            return np.inf
-        
-        else:
-            
-            return int(value)
-        
-        
+        self.df = self.df.loc[(self.df.layout.isin(self.card_layout_keep)) &
+                                ~(self.df.name.isin(self.basic_lands)) &
+                                ~(self.df.set_name.isin(self.non_legal_sets)) &
+                                (self.df["digital"] == False)]
+         
     def clean_power_and_toughness(self):
         
-        df_clean = self.df.copy()
-        
-        df_clean["power"] = df_clean["power"].apply(self.clean_combat_stat)
-        df_clean["toughness"] = df_clean["toughness"].apply(self.clean_combat_stat)
-        
-        self.df = df_clean
+        for combat_stat in ["power", "toughness"]:
+            
+            combat_stat_series = self.df[combat_stat].astype(str)
+            
+            nan_mask = self.df[combat_stat].isna()
+            inf_stat_mask = combat_stat_series.str.contains(r"\*", na = False)
+            fixed_combat_mask = ~nan_mask & ~inf_stat_mask
+            
+            self.df.loc[nan_mask, combat_stat] = None
+            self.df.loc[inf_stat_mask, combat_stat] = np.inf
+            self.df.loc[fixed_combat_mask, combat_stat] = combat_stat_series[fixed_combat_mask]
+            self.df[combat_stat] = self.df[combat_stat].astype("float64")
         
     def is_color(self):
     
         df_clean = self.df.copy()
         
+        card_colors = pd.Series(["_".join(item) for item in self.df["color_identity"]])
+        produced_mana_colors = self.df["produced_mana"].fillna("")
+        produced_mana_colors = pd.Series(["_".join(item) for item in produced_mana_colors])
+        
+        
         for color, color_char in self.colors_dict.items():
         
-            if color in ["blue", "red", "white", "black", "green"]:
-
-                df_clean.loc[:, f"is_{color}"] = df_clean["color_identity"].apply(
-                    lambda x: color_char in x if isinstance(x, list) else False
-                ).astype("boolean") 
-            
-                df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = None
-            
-                df_clean[f"produced_{color}"] = df_clean["produced_mana"].apply(
-                lambda x: color_char in x if isinstance(x, list) else False
-                ).astype("boolean")
-            
-                df_clean.loc[df_clean["produced_mana"].isna(), f"produced_{color}"] = None
+            if color in ["blue", "red", "white", "black", "green", "tap", "colorless"]:
+                
+                self.df.loc[:, f"is_{color}"] = card_colors.str.contains(
+                    
+                    color_char, na = False
+                    
+                )
+                
+                self.df.loc[self.df["color_identity"].isna(), f"is_{color}"] = None
+                
+                self.df.loc[:, f"produced_{color}"] = card_colors.str.contains(
+                    
+                    color_char, na = False
+                    
+                )
+                
+                self.df.loc[:, f"produced_{color}"] = produced_mana_colors.str.contains(
+                    
+                    color_char, na = False
+                    
+                )
+                self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
             
             else:  # This is for colorless
             
-                df_clean.loc[:, f"is_{color}"] = df_clean["color_identity"].apply(
-                    lambda x: len(x) == 0 if isinstance(x, list) else False
-                    ).astype("boolean")
-            
-                df_clean.loc[df_clean["color_identity"].isna(), f"is_{color}"] = None
-            
-                df_clean[f"produced_{color}"] = df_clean["produced_mana"].apply(
-                    lambda x: "C" in x if isinstance(x, list) else False
-                    ).astype("boolean")
-            
-                df_clean.loc[df_clean["produced_mana"].isna(), f"produced_{color}"] = None
-            
-        self.df = df_clean
-        
+                self.df.loc[:, f"is_{color}"] = card_colors == ""
+                self.df.loc[self.df["color_identity"].isna(), f"is_{color}"] = None
+                
+                self.df.loc[:, f"produced_{color}"] = produced_mana_colors.str.contains(
+                    
+                    color_char, na = False
+                    
+                    )
+                
+                self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
+                
     def is_in_format(self):
         
         df_clean = self.df.copy()
@@ -208,7 +209,7 @@ class MTGDataProcessor:
         
         all_games = set([game for sublist in df_clean["games"] for game in sublist])
         
-        for current_game in all_games:
+        for current_game in all_games:   
             
             df_clean[f"is_in_{current_game}"] = df_clean["games"].apply(
                 
@@ -217,9 +218,9 @@ class MTGDataProcessor:
                 ).astype("boolean")
             
             df_clean.loc[df_clean["games"].isna(), f"is_in_{current_game}"] = None
-            
-        self.df = df_clean
         
+    def is_supertype(self):
+    
     
     def is_card_type(self):
         

@@ -52,7 +52,8 @@ COLOR_PIPS_DICT = {"blue": "U",
                    "white": "W",
                    "black": "B",
                    "green": "G",
-                   "colorless": "C"}
+                   "colorless": "C",
+                   "tap": "T"}
 
 BATTLE_ATTRIBUTES = ["power", "toughness", "planeswalker_loyalty"]
 
