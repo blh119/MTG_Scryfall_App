@@ -128,13 +128,22 @@ class MTGDataProcessor:
             
     def filter_tokens_and_basic_lands(self):
         
-        self.df = self.df.loc[:, self.selected_columns]
+        self.df = self.df.loc[:, self.selected_columns].copy()
 
         # Filter for English only cards and non tokens and digital only and filter out basic lands
         self.df = self.df.loc[(self.df.layout.isin(self.card_layout_keep)) &
                                 ~(self.df.name.isin(self.basic_lands)) &
                                 ~(self.df.set_name.isin(self.non_legal_sets)) &
-                                (self.df["digital"] == False)]
+                                (self.df["digital"] == False)].copy()
+        
+    def filter_for_first_printings(self):
+        
+        self.df = self.df.loc[~self.df["oracle_id"].isna(), ].copy() # first printing of any card
+        self.df["type_line"] = self.df["type_line"].fillna("")
+        
+        self.df = self.df.sort_values(by = ["oracle_id", "release_at"], ascending = [True, True])
+        self.df = self.df.groupby(["oracle_id"]).head(1).reset_index(drop = True)
+        
          
     def clean_power_and_toughness(self):
         
@@ -152,8 +161,6 @@ class MTGDataProcessor:
             self.df[combat_stat] = self.df[combat_stat].astype("float64")
         
     def is_color(self):
-    
-        df_clean = self.df.copy()
         
         card_colors = pd.Series(["_".join(item) for item in self.df["color_identity"]])
         produced_mana_colors = self.df["produced_mana"].fillna("")
@@ -171,24 +178,22 @@ class MTGDataProcessor:
                 )
                 
                 self.df.loc[self.df["color_identity"].isna(), f"is_{color}"] = None
-                
-                self.df.loc[:, f"produced_{color}"] = card_colors.str.contains(
-                    
-                    color_char, na = False
-                    
-                )
+                self.df[f"is_{color}"] = self.df[f"is_{color}"].astype("boolean")
                 
                 self.df.loc[:, f"produced_{color}"] = produced_mana_colors.str.contains(
                     
                     color_char, na = False
                     
                 )
+                
                 self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
+                self.df[f"producd_{color}"] = self.df[f"produced_{color}"].astype("boolean")
             
             else:  # This is for colorless
             
                 self.df.loc[:, f"is_{color}"] = card_colors == ""
                 self.df.loc[self.df["color_identity"].isna(), f"is_{color}"] = None
+                self.df[f"is_{color}"] = self.df[f"is_{color}"].astype("boolean")
                 
                 self.df.loc[:, f"produced_{color}"] = produced_mana_colors.str.contains(
                     
@@ -197,107 +202,116 @@ class MTGDataProcessor:
                     )
                 
                 self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
+                self.df[f"producd_{color}"] = self.df[f"produced_{color}"].astype("boolean")
                 
     def is_in_format(self):
         
-        df_clean = self.df.copy()
-        
-        df_clean = pd.concat([df_clean,
-                              (df_clean["legalities"].apply(pd.Series))],
+        self.df = pd.concat([self.df,
+                             (pd.json_normalize(self.df["legalities"]))],
                                axis = 1,
                                ignore_index = False).reset_index(drop = True)
         
-        all_games = set([game for sublist in df_clean["games"] for game in sublist])
+        all_games = pd.Series(["_".join(item) for item in self.df["games"]])
+        unique_games = np.unique([item for current_list in self.df["games"] for item in current_list])
         
-        for current_game in all_games:   
+        for current_game in unique_games:   
             
-            df_clean[f"is_in_{current_game}"] = df_clean["games"].apply(
+            self.df[f"is_in_{current_game}"] = all_games.str.contains(
                 
-                lambda x: current_game in x if isinstance(x, list) else False
+                current_game, na = False
                 
-                ).astype("boolean")
+            )
             
-            df_clean.loc[df_clean["games"].isna(), f"is_in_{current_game}"] = None
-        
+            self.df.loc[self.df["games"].isna(), f"is_in_{current_game}"] = None
+            self.df[f"is_in_{current_game}"] = self.df[f"is_in_{current_game}"].astype("boolean")
+            
     def is_supertype(self):
-    
-    
+        
+        self.df["type_line"] = self.df["type_line"].astype(str)
+        
+        for supertype in self.scryfall_features_lists["supertypes"]:
+            
+            self.df[f"is_{supertype}"] = self.df["type_line"].str.contains(supertype, case = False, regex = True)
+            
     def is_card_type(self):
         
-        df_clean = self.df.copy()
+        for card_type in self.scryfall_features_lists["card_types"]:
+            
+            self.df[f"is_{card_type}"] = self.df["type_line"].str.contains(card_type, case = False, regex = True)
+            
+    def is_artifact_type(self):
         
-        for card_type in self.card_types:
+        for artifact_type in self.scryfall_features_lists["artifact_types"]:
             
-            has_card_type = df_clean["type_line"].str.contains(
-                
-                card_type, na = False, regex = True
-                
-            )
+            self.df[f"is_{artifact_type}"] = self.df["type_line"].str.contains(artifact_type, case = False, regex = True)
             
-            df_clean[f"is_{card_type}"] = None
-            df_clean.loc[has_card_type, f"is_{card_type}"] = True
-            df_clean.loc[~has_card_type, f"is_{card_type}"] = False
+    def is_creature_type(self):
+        
+        for creature_type in self.scryfall_features_lists["creature_types"]:
+            
+            self.df[f"is_{creature_type}"] = self.df["type_line"].str.contains(creature_type, case = False, regex = True)
+            
+    def is_enchantment_type(self):
+        
+        for enchantment_type in self.scryfall_features_lists["enchantment_types"]:
+            
+            self.df[f"is_{enchantment_type}"] = self.df["type_line"].str.contains(enchantment_type, case = False, regex = True)
             
             
-        for card_subtype in self.card_subtypes:
+    def is_land_type(self):
+        
+        for land_type in self.scryfall_features_lists["land_types"]:
             
-            has_card_type = df_clean["type_line"].str.contains(
-                
-                card_subtype, na = False, regex = True
+            self.df[f"is_{land_type}"] = self.df["type_line"].str.contains(land_type, case = False, regex = True)
+            
+    def is_planeswalker_type(self):
+        
+        for planeswalker_type in self.scryfall_features_lists["planeswalker_types"]:
+            
+            self.df["is_{planeswalker_type}"] = self.df["type_line"].str.contains(planeswalker_type, case = False, regex = True)
+            
+    def is_spell_type(self):
+        
+        for spell_type in self.scryfall_features_lists["spell_types"]:
+            
+            self.df["is_{spell_type}"] = self.df["type_line"].str.contains(spell_type, case = False, regex = True)
+            
+    def has_keyword_abiliity(self):
+        
+        keyword_list = pd.Series(["_".join(item) for item in self.df["keyword"]])
+        
+        for keyword_ability in self.scryfall_features_lists["keyword_abilities"]:
+            
+            self.df["has_{keyword_ability}"] = keyword_list.str.contains(keyword_ability, case = False, regex = True)
+            
+    def has_keyword_action(self):
+        
+        for keyword_action in self.scryfall_features_lists["keyword_actions"]:
+            
+            self.df["has_{keyword_action}"] = self.df["oracle_text"].str.contains(keyword_action, case = False, regex = True)
     
-            )
-            
-            df_clean[f"is_{card_subtype}"] = None
-            df_clean.loc[has_card_type, f"is_{card_subtype}"] = True
-            df_clean.loc[~has_card_type, f"is_{card_subtype}"] = False
-            
-        self.df = df_clean
+    def has_ability_word(self):
         
+        for ability_word in self.scryfall_features_lists["ability_words"]:
+            
+            self.df["has_{ability_word}"] = self.df["oracle_text"].str.contains(ability_word, case = False, regex = True)
+            
     def get_rarity(self):
         
-        df_clean = self.df.copy()
-
         for rarity_level in self.rarity:
             # Start with all NA
-            df_clean[f"is_{rarity_level}"] = None
+            self.df[f"is_{rarity_level}"] = None
         
             # Set True where rarity matches
-            df_clean.loc[df_clean["rarity"] == rarity_level, f"is_{rarity_level}"] = True
+            self.df.loc[self.df["rarity"] == rarity_level, f"is_{rarity_level}"] = True
         
             # Set False where rarity exists but doesn't match
-            not_na_mask = df_clean["rarity"].notna()
-            not_match_mask = df_clean["rarity"] != rarity_level
-            df_clean.loc[not_na_mask & not_match_mask, f"is_{rarity_level}"] = False
+            not_na_mask = self.df["rarity"].notna()
+            not_match_mask = self.df["rarity"] != rarity_level
+            self.df.loc[not_na_mask & not_match_mask, f"is_{rarity_level}"] = False
         
             # Ensure boolean type
-            df_clean[f"is_{rarity_level}"] = df_clean[f"is_{rarity_level}"].astype("boolean")
-    
-        self.df = df_clean
-    
-    def create_subtype(self):
-        
-        df_clean = self.df.copy()
-        
-        df_clean[["card_type", "card_subtype"]] = df_clean["type_line"].str.split(pat = "—", n = 1, expand = True)
-        
-        df_clean["card_type"] = df_clean["card_type"].str.strip()
-        df_clean["card_subtype"] = df_clean["card_subtype"].str.strip()
-
-        card_subtype_na_mask = df_clean["card_subtype"].isna()
-
-        # fill na card_subtype with the main card_type
-        df_clean["card_subtype"] = df_clean["card_subtype"].fillna(df_clean.loc[card_subtype_na_mask, "card_type"])
-        
-        self.df = df_clean
-        
-    def create_keyword_string(self):
-        
-        df_clean = self.df.copy()
-        
-        df_clean["keywords_string"] = df_clean["keywords"].apply(
-            lambda x: ", ".join(x) if isinstance(x, list) and len(x) > 0 else None)
-        
-        self.df = df_clean
+            self.df[f"is_{rarity_level}"] = self.df[f"is_{rarity_level}"].astype("boolean")
         
     def create_legalities(self):  
         
@@ -319,34 +333,36 @@ class MTGDataProcessor:
         
     def count_number_of_color_pips(self):
         
-        df_output = self.df.copy()
+        mana_cost_list = self.df["mana_cost"].astype(str)
+
+        self.df["mana_cost"] = mana_cost_list.str.replace(r"[{}]", "", regex = True)
         
-        df_output["mana_cost"] = df_output["mana_cost"].apply(lambda x: re.sub(pattern = r"[{}]",  repl = "", string = str(x)))
-        
+        # keep as lambda function since it is well defined
         for color, color_char in self.color_pips_dict.items():
             
-            df_output[f"{color}_pips"] = df_output["mana_cost"].apply(lambda x: len(re.findall(re.escape(color_char), str(x))))
+            self.df[f"{color}_pips"] = self.df["mana_cost"].apply(lambda x: len(re.findall(re.escape(color_char), str(x))))
             
-        df_output["generic_pips"] = df_output["mana_cost"].apply(lambda x: sum(int(d) for d in re.findall(r"\d+", str(x))))
+        self.df["generic_pips"] = self.df["mana_cost"].apply(lambda x: sum(int(d) for d in re.findall(r"\d+", str(x))))
         
-        df_output["generic_pips"] = np.select(
-            
-            condlist = [df_output["mana_cost"].apply(lambda x: bool(re.search(r"X", str(x)))),
-                        df_output["mana_cost"].isna()],
-            choicelist = [np.inf, None],
-            default = df_output["generic_pips"]
-            
-        )
+        mana_cost_list = self.df["mana_cost"].astype(str)
+        generic_pip_list = self.df["generic_pips"]
         
-        df_output["total_pips"] = (df_output["generic_pips"] +
-                                   df_output["blue_pips"] +
-                                   df_output["red_pips"] +
-                                   df_output["black_pips"] +
-                                   df_output["white_pips"] +
-                                   df_output["green_pips"] +
-                                   df_output["colorless_pips"])
+        inf_stat_mask = generic_pip_list.str.contains(r"X", case = False, regex = True)
+        nan_mask = generic_pip_list.isna()
         
-        self.df = df_output
+        self.df.loc[inf_stat_mask, "generic_pips"] = np.inf
+        self.df.loc[nan_mask, "generic_pips"] = None
+        
+        generic_pip_number_mask = ~inf_stat_mask & ~nan_mask
+        self.df[generic_pip_number_mask, "generic_pips"] = generic_pip_list[generic_pip_number_mask]
+        
+        self.df["total_pips"] = (self.df["generic_pips"] +
+                                 self.df["blue_pips"] +
+                                 self.df["red_pips"] +
+                                 self.df["black_pips"] +
+                                 self.df["white_pips"] +
+                                 self.df["green_pips"] +
+                                 self.df["colorless_pips"])
         
     def extract_planeswalker_loyalty(self, value): 
         
