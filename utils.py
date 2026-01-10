@@ -18,7 +18,6 @@ from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-nltk.download("stopwords", force = True)
 nltk.download("punkt", force = True)
 
 class MTGDataProcessor:
@@ -141,7 +140,7 @@ class MTGDataProcessor:
         self.df = self.df.loc[~self.df["oracle_id"].isna(), ].copy() # first printing of any card
         self.df["type_line"] = self.df["type_line"].fillna("")
         
-        self.df = self.df.sort_values(by = ["oracle_id", "release_at"], ascending = [True, True])
+        self.df = self.df.sort_values(by = ["oracle_id", "card_name", "release_at"], ascending = [True, True])
         self.df = self.df.groupby(["oracle_id"]).head(1).reset_index(drop = True)
         
          
@@ -201,6 +200,7 @@ class MTGDataProcessor:
                     
                     )
                 
+
                 self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
                 self.df[f"producd_{color}"] = self.df[f"produced_{color}"].astype("boolean")
                 
@@ -314,22 +314,19 @@ class MTGDataProcessor:
             self.df[f"is_{rarity_level}"] = self.df[f"is_{rarity_level}"].astype("boolean")
         
     def create_legalities(self):  
-        
-        df_clean = self.df.copy()
+
         
         for game in self.game_formats:
             
             game_string = "_".join([game, "legal"])
             
-            df_clean[game_string] = None
+            self.df[game_string] = None
             
-            df_clean.loc[df_clean[game] == "legal", game_string] = True
-            df_clean.loc[df_clean[game] == "not_legal", game_string] = False
-            df_clean.loc[df_clean[game] == "banned", game_string] = False
+            self.df.loc[self.df[game] == "legal", game_string] = True
+            self.df.loc[self.df[game] == "not_legal", game_string] = False
+            self.df.loc[self.df[game] == "banned", game_string] = False
             
-            df_clean.loc[df_clean[game].isna(), game_string] = None
-        
-        self.df = df_clean
+            self.df.loc[self.df[game].isna(), game_string] = None
         
     def count_number_of_color_pips(self):
         
@@ -364,119 +361,91 @@ class MTGDataProcessor:
                                  self.df["green_pips"] +
                                  self.df["colorless_pips"])
         
-    def extract_planeswalker_loyalty(self, value): 
-        
-        if value is None or (isinstance(value, float) and np.isnan(value)):
-        
-            return None
-
-        value = str(value)
-
-        match = re.search(r"(\d+|X)", value)
-        
-        if match:
-            
-            token = match.group(1)
-        
-        if token == "X":
-            
-            return np.inf
-        
-        else:
-
-            return int(token)
-
-        return None
-        
     def planeswalker_loyalty(self):
         
-        df_clean = self.df.copy()
+        planeswalker_loyalty_list = pd.Series(self.df["planeswalker_loyalty"].astype(str))
+        
+        inf_stat_mask = planeswalker_loyalty_list.str.contains(r"\X", regex = True, case = False)
+        number_mask = planeswalker_loyalty_list.str.contains(r"\d+", regex = True, case = False)
+        nan_mask = ~inf_stat_mask & ~number_mask
+        
+        self.df.loc[inf_stat_mask, "planeswalker_loyalty"] = np.inf
+        self.df.loc[nan_mask, "planeswalker_loyalty"] =  None
+        self.df.loc[number_mask, "planeswalker_loyalty"] = planeswalker_loyalty_list[number_mask].copy().astype("int64")
+        
 
-        df_clean["planeswalker_loyalty"] = df_clean["loyalty"].apply(self.extract_planeswalker_loyalty) 
+    def get_number_of_splits(self, column_name):
         
-        self.df = df_clean
-
-    def get_number_of_splits(self, df, column_name):
-        
-        df_clean = df.copy()
-        
-        df_clean["number_of_splits"] = df_clean[column_name].apply(
+        self.df["number_of_splits"] = self.df[column_name].apply(
             
             lambda x: len(re.findall(pattern = r"//", string = str(x))),
             
         )
         
-        return max(df_clean["number_of_splits"]) + 1
+        return max(self.df["number_of_splits"]) + 1
     
     def split_types(self):
-        
-        df_clean = self.df.copy()
             
         colnames_to_split = ["card_name", "mana_cost", "type_line"]        
-        df_clean = df_clean.rename(columns = {"name" : "card_name"})
+        self.df = self.df.rename(columns = {"name" : "card_name"})
         
         for col_name in colnames_to_split:
             
-            number_of_splits = self.get_number_of_splits(df_clean, col_name)
+            number_of_splits = self.get_number_of_splits(col_name)
             
             number_of_splits_list = [f"{col_name}-{i}" for i in range(1, number_of_splits + 1)]
                 
-            df_clean_split = df_clean[col_name].str.split("//", expand = True)
-            df_clean_split.columns = number_of_splits_list
+            df_split = self.df[col_name].str.split("//", expand = True)
+            df_split.columns = number_of_splits_list
             
-            df_clean = pd.concat([df_clean, df_clean_split], axis = 1).reset_index(drop = True)
+            self.df = pd.concat([self.df, df_split], axis = 1).reset_index(drop = True)
             
-        df_clean = df_clean.drop(colnames_to_split, axis = 1)
-            
-        self.df = df_clean
+        self.df = self.df.drop(colnames_to_split, axis = 1)
+
         
     def pivot_longer_double_cards(self):
         
-        df_clean = self.df
-        
-        pivot_columns = df_clean.columns[df_clean.columns.str.contains(
+        pivot_columns = self.df.columns[self.df.columns.str.contains(
             
             "card_name-\d+|mana_cost-\d+|type_line-\d+")].tolist()
         
         pivot_columns = list(set([re.sub(pattern = r"-\d+", string = col, repl = "") for col in pivot_columns]))
         
-        df_clean = pd.wide_to_long(df_clean, pivot_columns, i = "id", 
-                                   j = "card_sub", sep = "-")
+        self.df = pd.wide_to_long(self.df, pivot_columns, i = "id", j = "card_sub", sep = "-")
         
-        df_clean = df_clean.reset_index()
-        
-        self.df = df_clean
+        self.df = self.df.reset_index(drop = True)
         
     def drop_non_legal_cards(self):
         
-        df_clean = self.df.copy()
-        
-        legal_columns = [current_col for current_col in df_clean.columns if bool(re.search(pattern = r"_legal$",
+        legal_columns = [current_col for current_col in self.df.columns if bool(re.search(pattern = r"_legal$",
                                                                                            string = current_col))]
         
-        temp = df_clean[legal_columns]
+        temp = self.df[legal_columns]
         temp = temp.fillna(False).astype(int)
         
-        df_clean["legal_sum"] = temp.sum(axis = 1)
+        self.df["legal_sum"] = temp.sum(axis = 1)
         
-        self.df = df_clean[df_clean["legal_sum"] != 0]
+        self.df = self.df[self.df["legal_sum"] != 0].copy()
         
     def drop_unnecessary_columns(self):
         
-        df_clean = self.df.copy()
-        df_clean = df_clean.drop(self.drop_columns, axis = 1)
-        df_clean.columns = [current_col.lower() for current_col in df_clean.columns]
-        self.df = df_clean
+        self.df = self.df.drop(self.drop_columns, axis = 1)
+        self.df.columns = [current_col.lower() for current_col in self.df.columns]
         
-    def make_data_unique(self):
+    def one_hot_encode_features(self):
         
-        df_clean = self.df.copy()
+        self.is_supertype()
+        self.is_card_type()
+        self.is_artifact_type()
+        self.is_creature_type()
+        self.is_enchantment_type()
+        self.is_land_type()
+        self.is_planeswalker_type()
+        self.is_spell_type()
+        self.has_keyword_abiliity()
+        self.has_keyword_action()
+        self.has_ability_word()
         
-        df_clean = df_clean.groupby("card_name").head(1).reset_index(drop = True)
-        
-        self.df = df_clean
-        
-
     def process_data(self):
         
         if self.df is None:
@@ -484,21 +453,16 @@ class MTGDataProcessor:
             raise ValueError("No data loaded. Call load_data() first.")
         
         self.filter_tokens_and_basic_lands()
-        self.split_types()
         self.pivot_longer_double_cards()
-        self.is_color()
-        self.is_in_format()
-        self.is_card_type()
+        self.filter_for_first_printings()
+        self.one_hot_encode_features()
         self.get_rarity()
-        self.create_keyword_string()
         self.create_legalities()
         self.count_number_of_color_pips()
-        self.create_subtype()
         self.drop_non_legal_cards()
         self.clean_power_and_toughness()
         self.planeswalker_loyalty()
         self.drop_unnecessary_columns()
-        self.make_data_unique()
         
 class CardRecommenderModel:
     
@@ -552,7 +516,7 @@ class CardRecommenderModel:
         self.keywords_string_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
                                             vector_size = 50,
                                             window = 5, 
-                                            min_count = 1, 
+         t                                   min_count = 1, 
                                             workers = 4,
                                             seed = 99)
         
