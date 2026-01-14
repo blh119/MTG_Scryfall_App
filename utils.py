@@ -140,7 +140,7 @@ class MTGDataProcessor:
         self.df = self.df.loc[~self.df["oracle_id"].isna(), ].copy() # first printing of any card
         self.df["type_line"] = self.df["type_line"].fillna("")
         
-        self.df = self.df.sort_values(by = ["oracle_id", "card_name", "release_at"], ascending = [True, True])
+        self.df = self.df.sort_values(by = ["oracle_id", "card_name", "released_at"], ascending = [True, True, True])
         self.df = self.df.groupby(["oracle_id"]).head(1).reset_index(drop = True)
         
          
@@ -268,33 +268,33 @@ class MTGDataProcessor:
         
         for planeswalker_type in self.scryfall_features_lists["planeswalker_types"]:
             
-            self.df["is_{planeswalker_type}"] = self.df["type_line"].str.contains(planeswalker_type, case = False, regex = True)
+            self.df[f"is_{planeswalker_type}"] = self.df["type_line"].str.contains(planeswalker_type, case = False, regex = True)
             
     def is_spell_type(self):
         
         for spell_type in self.scryfall_features_lists["spell_types"]:
             
-            self.df["is_{spell_type}"] = self.df["type_line"].str.contains(spell_type, case = False, regex = True)
+            self.df[f"is_{spell_type}"] = self.df["type_line"].str.contains(spell_type, case = False, regex = True)
             
     def has_keyword_abiliity(self):
         
-        keyword_list = pd.Series(["_".join(item) for item in self.df["keyword"]])
+        keyword_list = pd.Series(["_".join(item) for item in self.df["keywords"]])
         
         for keyword_ability in self.scryfall_features_lists["keyword_abilities"]:
             
-            self.df["has_{keyword_ability}"] = keyword_list.str.contains(keyword_ability, case = False, regex = True)
+            self.df[f"has_{keyword_ability}"] = keyword_list.str.contains(keyword_ability, case = False, regex = True)
             
     def has_keyword_action(self):
         
         for keyword_action in self.scryfall_features_lists["keyword_actions"]:
             
-            self.df["has_{keyword_action}"] = self.df["oracle_text"].str.contains(keyword_action, case = False, regex = True)
+            self.df[f"has_{keyword_action}"] = self.df["oracle_text"].str.contains(keyword_action, case = False, regex = True)
     
     def has_ability_word(self):
         
         for ability_word in self.scryfall_features_lists["ability_words"]:
             
-            self.df["has_{ability_word}"] = self.df["oracle_text"].str.contains(ability_word, case = False, regex = True)
+            self.df[f"has_{ability_word}"] = self.df["oracle_text"].str.contains(ability_word, case = False, regex = True)
             
     def get_rarity(self):
         
@@ -314,20 +314,11 @@ class MTGDataProcessor:
             self.df[f"is_{rarity_level}"] = self.df[f"is_{rarity_level}"].astype("boolean")
         
     def create_legalities(self):  
-
         
-        for game in self.game_formats:
-            
-            game_string = "_".join([game, "legal"])
-            
-            self.df[game_string] = None
-            
-            self.df.loc[self.df[game] == "legal", game_string] = True
-            self.df.loc[self.df[game] == "not_legal", game_string] = False
-            self.df.loc[self.df[game] == "banned", game_string] = False
-            
-            self.df.loc[self.df[game].isna(), game_string] = None
-        
+        self.df = pd.concat([self.df, pd.json_normalize(self.df["legalities"])], axis = 1)
+        self.df[self.game_formats] = self.df[self.game_formats].replace(to_replace = ["legal", "not_legal", "banned", "restricted"],
+                                                                        value = [True, False, False, True])
+    
     def count_number_of_color_pips(self):
         
         mana_cost_list = self.df["mana_cost"].astype(str)
@@ -344,14 +335,14 @@ class MTGDataProcessor:
         mana_cost_list = self.df["mana_cost"].astype(str)
         generic_pip_list = self.df["generic_pips"]
         
-        inf_stat_mask = generic_pip_list.str.contains(r"X", case = False, regex = True)
+        inf_stat_mask = mana_cost_list.str.contains(r"X", case = False, regex = True)
         nan_mask = generic_pip_list.isna()
         
         self.df.loc[inf_stat_mask, "generic_pips"] = np.inf
         self.df.loc[nan_mask, "generic_pips"] = None
         
         generic_pip_number_mask = ~inf_stat_mask & ~nan_mask
-        self.df[generic_pip_number_mask, "generic_pips"] = generic_pip_list[generic_pip_number_mask]
+        self.df.loc[generic_pip_number_mask, "generic_pips"] = generic_pip_list[generic_pip_number_mask]
         
         self.df["total_pips"] = (self.df["generic_pips"] +
                                  self.df["blue_pips"] +
@@ -363,9 +354,9 @@ class MTGDataProcessor:
         
     def planeswalker_loyalty(self):
         
-        planeswalker_loyalty_list = pd.Series(self.df["planeswalker_loyalty"].astype(str))
+        planeswalker_loyalty_list = pd.Series(self.df["loyalty"].astype(str))
         
-        inf_stat_mask = planeswalker_loyalty_list.str.contains(r"\X", regex = True, case = False)
+        inf_stat_mask = planeswalker_loyalty_list.str.contains(r"X", regex = True, case = False)
         number_mask = planeswalker_loyalty_list.str.contains(r"\d+", regex = True, case = False)
         nan_mask = ~inf_stat_mask & ~number_mask
         
@@ -417,10 +408,7 @@ class MTGDataProcessor:
         
     def drop_non_legal_cards(self):
         
-        legal_columns = [current_col for current_col in self.df.columns if bool(re.search(pattern = r"_legal$",
-                                                                                           string = current_col))]
-        
-        temp = self.df[legal_columns]
+        temp = self.df[self.game_formats]
         temp = temp.fillna(False).astype(int)
         
         self.df["legal_sum"] = temp.sum(axis = 1)
@@ -431,7 +419,9 @@ class MTGDataProcessor:
         
         self.df = self.df.drop(self.drop_columns, axis = 1)
         self.df.columns = [current_col.lower() for current_col in self.df.columns]
-        
+        self.df.columns = [re.sub(pattern = " ", repl = "_", string = current_col) for current_col in self.df.columns]
+        self.df.columns = [re.sub(pattern = r"[!'\-.]", repl = "", string = current_col) for current_col in self.df.columns]
+
     def one_hot_encode_features(self):
         
         self.is_supertype()
@@ -453,6 +443,7 @@ class MTGDataProcessor:
             raise ValueError("No data loaded. Call load_data() first.")
         
         self.filter_tokens_and_basic_lands()
+        self.split_types()
         self.pivot_longer_double_cards()
         self.filter_for_first_printings()
         self.one_hot_encode_features()
@@ -481,6 +472,7 @@ class CardRecommenderModel:
         if self.valid_game_format in self.data_processor.game_formats:
             
             self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True].reset_index(drop = True)
+        
         else:
 
             raise ValueError("Attempting to pass non-legal game format")
@@ -504,7 +496,7 @@ class CardRecommenderModel:
             filtered_token = [word for word in token if word not in self.stopwords] 
             return filtered_token
         
-    def trainWord2Vec_model(self):
+    def trainFastText_model(self):
 
         self.oracle_text_model = Word2Vec(sentences = self.data_processor.df["oracle_text_tokens"],
                                           vector_size = 100,
@@ -516,7 +508,7 @@ class CardRecommenderModel:
         self.keywords_string_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
                                             vector_size = 50,
                                             window = 5, 
-         t                                   min_count = 1, 
+                                            min_count = 1, 
                                             workers = 4,
                                             seed = 99)
         
