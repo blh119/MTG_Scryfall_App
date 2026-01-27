@@ -11,7 +11,7 @@ SELECTED_COLUMNS = ["object", "id", "name", "lang",
                     "games", "game_changer", "set_id", "set",
                     "set_name", "set_type", "rarity", "digital",
                     "artist", "textless", "power", "toughness",
-                    "loyalty", "printed_name"] 
+                    "loyalty", "printed_name", "oracle_id"] 
 
 BASIC_LAND_TYPES = ["Forest", "Mountain", "Island", "Swamp", "Plains"]
 
@@ -63,14 +63,7 @@ DROP_COLUMNS = ["artist", "cmc", "color_identity",
                 "object", "printed_name", "produced_mana",
                 "rarity", "released_at", "set",
                 "set_id", "set_name", "set_type",
-                "standard", "future", "historic",
-                "timeless", "gladiator", "pioneer", 
-                "explorer", "modern", "legacy", 
-                "pauper", "vintage", "penny", 
-                "commander", "oathbreaker", "standardbrawl", 
-                "brawl", "alchemy", "paupercommander", 
-                "duel", "oldschool", "premodern", 
-                "predh", "legal_sum"]
+                "legal_sum"]
 
 STOPWORDS = ['a', 'about', 'above',
              'after', 'again', 'against',

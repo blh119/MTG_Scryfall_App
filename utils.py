@@ -4,20 +4,18 @@ Created on Thu Jun 26 23:14:41 2025
 
 @author: holli
 """
+
 import requests
 import pandas as pd
 import numpy as np
 import re
 import nltk
 import matplotlib.pyplot as plt
-from gensim.models import Word2Vec
+from gensim.models import FastText
 from nltk.tokenize import word_tokenize
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import KMeans
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
+from sklearn.preprocessing import RobustScaler
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 nltk.download("punkt", force = True)
 
 class MTGDataProcessor:
@@ -137,6 +135,8 @@ class MTGDataProcessor:
         
     def filter_for_first_printings(self):
         
+        print(self.df.columns.tolist())
+        
         self.df = self.df.loc[~self.df["oracle_id"].isna(), ].copy() # first printing of any card
         self.df["type_line"] = self.df["type_line"].fillna("")
         
@@ -186,7 +186,7 @@ class MTGDataProcessor:
                 )
                 
                 self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
-                self.df[f"producd_{color}"] = self.df[f"produced_{color}"].astype("boolean")
+                self.df[f"produced_{color}"] = self.df[f"produced_{color}"].astype("boolean")
             
             else:  # This is for colorless
             
@@ -202,28 +202,7 @@ class MTGDataProcessor:
                 
 
                 self.df.loc[self.df["produced_mana"].isna(), f"produced_{color}"] = None
-                self.df[f"producd_{color}"] = self.df[f"produced_{color}"].astype("boolean")
-                
-    def is_in_format(self):
-        
-        self.df = pd.concat([self.df,
-                             (pd.json_normalize(self.df["legalities"]))],
-                               axis = 1,
-                               ignore_index = False).reset_index(drop = True)
-        
-        all_games = pd.Series(["_".join(item) for item in self.df["games"]])
-        unique_games = np.unique([item for current_list in self.df["games"] for item in current_list])
-        
-        for current_game in unique_games:   
-            
-            self.df[f"is_in_{current_game}"] = all_games.str.contains(
-                
-                current_game, na = False
-                
-            )
-            
-            self.df.loc[self.df["games"].isna(), f"is_in_{current_game}"] = None
-            self.df[f"is_in_{current_game}"] = self.df[f"is_in_{current_game}"].astype("boolean")
+                self.df[f"produced_{color}"] = self.df[f"produced_{color}"].astype("boolean")
             
     def is_supertype(self):
         
@@ -422,8 +401,21 @@ class MTGDataProcessor:
         self.df.columns = [re.sub(pattern = " ", repl = "_", string = current_col) for current_col in self.df.columns]
         self.df.columns = [re.sub(pattern = r"[!'\-.]", repl = "", string = current_col) for current_col in self.df.columns]
 
+        # fix key names as well
+        for current_key in self.scryfall_features_lists.keys():
+            
+            self.scryfall_features_lists[current_key] = [new_key.lower() 
+                                                         for new_key in self.scryfall_features_lists[current_key]]
+            
+            self.scryfall_features_lists[current_key] = [re.sub(pattern = " ", repl = "_", string = new_key) 
+                                                         for new_key in self.scryfall_features_lists[current_key]]
+
+            self.scryfall_features_lists[current_key] = [re.sub(pattern = r"[!'\-.]", repl = "", string = new_key)
+                                                         for new_key in self.scryfall_features_lists[current_key]]
+
     def one_hot_encode_features(self):
-        
+
+        self.is_color()
         self.is_supertype()
         self.is_card_type()
         self.is_artifact_type()
@@ -435,19 +427,21 @@ class MTGDataProcessor:
         self.has_keyword_abiliity()
         self.has_keyword_action()
         self.has_ability_word()
+        self.get_rarity()
         
     def process_data(self):
         
         if self.df is None:
             
             raise ValueError("No data loaded. Call load_data() first.")
-        
+
+        self.get_scryfall_lists()
+        self.get_scryfall_cards()
         self.filter_tokens_and_basic_lands()
         self.split_types()
         self.pivot_longer_double_cards()
         self.filter_for_first_printings()
         self.one_hot_encode_features()
-        self.get_rarity()
         self.create_legalities()
         self.count_number_of_color_pips()
         self.drop_non_legal_cards()
@@ -461,8 +455,6 @@ class CardRecommenderModel:
         
         self.data_processor = data_processor
         self.stopwords = stopwords
-        self.orcale_text_model = None 
-        self.keyword_text_model = None 
         self.valid_game_format = None
                     
     def legal_cards_for_format(self, game_format = "Commander"):
@@ -471,7 +463,7 @@ class CardRecommenderModel:
 
         if self.valid_game_format in self.data_processor.game_formats:
             
-            self.data_processor.df = self.data_processor.df[self.data_processor.df[f"{self.valid_game_format}_legal"] == True].reset_index(drop = True)
+            self.data_processor.df = self.data_processor.df[self.data_processor.df[self.valid_game_format] == True].reset_index(drop = True)
         
         else:
 
@@ -480,9 +472,10 @@ class CardRecommenderModel:
     def tokenize_text(self):
         
         self.data_processor.df["oracle_text_tokens"] = self.data_processor.df["oracle_text"].apply(self.tokenize_words)
-        self.data_processor.df["keywords_string_tokens"] = self.data_processor.df["keywords_string"].apply(self.tokenize_words)
-        self.data_processor.df["card_name_tokens"] = self.data_processor.df["card_name"].apply(self.tokenize_words)
-        self.data_processor.df["card_subtype_tokens"] = self.data_processor.df["card_subtype"].apply(self.tokenize_words)
+        
+        lowercased_names = self.data_processor.df["card_name"].str.lower()
+        cleaned_names = lowercased_names.str.strip() 
+        self.data_processor.df["card_name"] = cleaned_names
         
     def tokenize_words(self, text):
         
@@ -498,183 +491,253 @@ class CardRecommenderModel:
         
     def trainFastText_model(self):
 
-        self.oracle_text_model = Word2Vec(sentences = self.data_processor.df["oracle_text_tokens"],
+        self.oracle_text_model = FastText(sentences = self.data_processor.df["oracle_text_tokens"],
                                           vector_size = 100,
                                           window = 5, 
                                           min_count = 1, 
                                           workers = 4,
                                           seed = 99)
         
-        self.keywords_string_model = Word2Vec(sentences = self.data_processor.df["keywords_string_tokens"],
-                                            vector_size = 50,
-                                            window = 5, 
-                                            min_count = 1, 
-                                            workers = 4,
-                                            seed = 99)
+    def fit_tfidf_vectorizers(self):
         
-        self.card_name_model = Word2Vec(sentences = self.data_processor.df["card_name_tokens"],
-                                             vector_size = 40,
-                                             window = 5, 
-                                             min_count = 1, 
-                                             workers = 4,
-                                             seed = 99)
-        
-        self.card_subtype_model = Word2Vec(sentences = self.data_processor.df["card_subtype_tokens"],
-                                           vector_size = 40,
-                                           window = 5,
-                                           min_count = 1,
-                                           workers = 4,
-                                           seed = 99)
-        
-    def average_word_vector_to_df(self):
-        
-        self.data_processor.df["oracle_text_avg_vec"] = self.data_processor.df["oracle_text_tokens"].apply(
-            
-            lambda x: self.get_average_word_vector(self.oracle_text_model, x)
-            
-            )
-        
-        self.data_processor.df["keywords_string_avg_vec"] = self.data_processor.df["keywords_string_tokens"].apply(
-            
-            lambda x: self.get_average_word_vector(self.keywords_string_model, x)
-            
-            )
-        
-        self.data_processor.df["card_name_avg_vec"] = self.data_processor.df["card_name_tokens"].apply(
-            
-            lambda x: self.get_average_word_vector(self.card_name_model, x)
-            
-            )
-        
-        self.data_processor.df["card_subtype_avg_vec"] = self.data_processor.df["card_subtype_tokens"].apply(
-            
-            lambda x: self.get_average_word_vector(self.card_subtype_model, x)
-            
-            )
-        
-    def get_average_word_vector(self, model, text_vec):
-        
-        if text_vec == []:
-            
-            return np.zeros(model.vector_size)
-        
-        else: 
-            
-            word_vec = [model.wv[word] for word in text_vec if word in model.wv.key_to_index] 
-            
-            if word_vec:
-                
-                return np.mean(word_vec, axis = 0)
-            
-            else:
-                
-                return np.zeros(model.vector_size)
+        oracle_text = self.data_processor.df["oracle_text_tokens"].apply(lambda x: " ".join(x))
+
+        def identity_tokenizer(text):
+            return text.split() if text else []
+
+        self.oracle_tfidf = TfidfVectorizer(
+            tokenizer = identity_tokenizer,
+            lowercase = False,
+            token_pattern = None,
+            smooth_idf = True,
+            sublinear_tf = True  # optional: log(tf) scaling
+        )
     
+        self.oracle_tfidf.fit(oracle_text)
+
+    def tfidf_weighted_average_vectors(self):
+ 
+        oracle_text = self.data_processor.df["oracle_text_tokens"].apply(lambda x: " ".join(x))
+
+        oracle_tfidf_matrix = self.oracle_tfidf.transform(oracle_text)
+
+        oracle_vocab = self.oracle_tfidf.get_feature_names_out()
+
+        oracle_word_to_col = {word: i for i, word in enumerate(oracle_vocab)}
+
+        def _compute_weighted_vec(tokens, tfidf_row, word_to_col, ft_model):
+            
+            if not tokens:
+                return np.zeros(ft_model.vector_size)
+        
+            tfidf_scores = tfidf_row.toarray().flatten()
+            weighted_sum = np.zeros(ft_model.vector_size)
+            total_weight = 0.0
+
+            for word in tokens:
+                
+                if word not in word_to_col or word not in ft_model.wv.key_to_index:
+                    continue
+                    
+                weight = tfidf_scores[word_to_col[word]]
+                
+                if weight > 0:
+                    weighted_sum += weight * ft_model.wv[word]
+                    total_weight += weight
+
+            if total_weight == 0:
+                return np.zeros(ft_model.vector_size)
+                
+            return weighted_sum / total_weight
+
+        # Apply to all cards
+        oracle_vecs = []
+        card_name_vecs = []
+        n = len(self.data_processor.df)
+
+        for i in range(n):
+            
+            row = self.data_processor.df.iloc[i]
+            
+            oracle_vec = _compute_weighted_vec(
+                
+                row["oracle_text_tokens"],
+                oracle_tfidf_matrix[i],
+                oracle_word_to_col,
+                self.oracle_text_model
+                
+            )
+    
+            oracle_vecs.append(oracle_vec)
+
+        self.data_processor.df["oracle_text_tfidf_vec"] = oracle_vecs
+        
+    def join_text_vectors(self):
+
+        oracle_text_vec_names = [f"oracle_text_vec_{i}" for i in range(1, 101)]
+        self.oracle_text_vec_list = []
+
+        for index, row in self.data_processor.df.iterrows():
+
+            oracle_dict = dict(zip(oracle_text_vec_names, row["oracle_text_tfidf_vec"]))
+
+            self.oracle_text_vec_list.append(oracle_dict)
+
+        oracle_text_df = pd.DataFrame(self.oracle_text_vec_list)
+
+        oracle_text_df = oracle_text_df.reset_index(drop = True)
+        card_name_df = card_name_df.reset_index(drop = True)
+        self.data_processor.df = self.data_processor.df.reset_index(drop = True)
+
+        self.data_processor.df = pd.concat([self.data_processor.df, card_name_df, oracle_text_df], axis = 1)
+
+        self.oracle_text_vecs = self.data_processor.df["oracle_text_tfidf_vec"].values
+        self.card_name_text_vecs = self.data_processor.df["card_name_tfidf_vec"].values
+
+        self.data_processor.df = self.data_processor.df.drop(["oracle_text_tfidf_vec", "card_name_tfidf_vec"], axis = 1)
+
     def get_model_inputs(self):
         
-        # color columns
+        self.robustscaler = RobustScaler() # define Robust Scaler
+
+        ########### Collect color features ###################
+
         is_color = ["is_" + color for color in list(self.data_processor.colors_dict)]
         produced_color = ["produced_" + color for color in list(self.data_processor.colors_dict)]
-        
+
         color_pips = [color + "_pips" for color in list(self.data_processor.colors_dict)]
-        
-        primary_card_type = ["is_" + card_type.lower() for card_type in self.data_processor.card_types]
-        secondary_card_type = ["is_" + card_subtype.lower() for card_subtype in self.data_processor.card_subtypes]
-        
-        rarity_type = ["is_" + rarity.lower() for rarity in self.data_processor.rarity]
-        
-        battle_attributes_type = self.data_processor.battle_attributes
-        
         color_type_features = is_color + produced_color
-        
-        self.standardscaler = StandardScaler()
-        
+        # has or produces colors
         self.color_type_features = self.data_processor.df[color_type_features].fillna(False).astype(int).values
-        
+
+        # how much does it cost?
         self.color_pips_features = self.data_processor.df[color_pips].fillna(0).values
         self.color_pips_features = np.nan_to_num(x = self.color_pips_features,
                                                  nan = -1,
                                                  posinf = 1e6,
                                                  neginf = -1e6)
-        
-        self.color_pips_features = self.standardscaler.fit_transform(self.color_pips_features)
-        
+
+        self.color_pips_features = self.robustscaler.fit_transform(self.color_pips_features)
+
         self.color_features = np.hstack([self.color_type_features, 
                                          self.color_pips_features])
-        
-        self.primary_card_type_features = self.data_processor.df[primary_card_type].fillna(False).astype(int).values
-        self.secondary_card_type_features = self.data_processor.df[secondary_card_type].fillna(False).astype(int).values
-        
-        self.rarity_features = self.data_processor.df[rarity_type].fillna(False).astype(int).values
-        
-        self.battle_features = self.data_processor.df[battle_attributes_type].values
+
+        color_labels = is_color + produced_color + color_pips
+        ############################################################
+
+        ########### Rarity Features ################################
+
+        rarity_labels = ["is_" + rarity.lower() for rarity in self.data_processor.rarity]
+        self.rarity_features = self.data_processor.df[rarity_labels].fillna(False).astype(int).values
+
+        ########### Card Search Feaures ############################
+            
+        supertype_labels = [f"is_{supertype}" for supertype in self.data_processor.scryfall_features_lists["supertypes"]]
+        card_types_labels = [f"is_{card_type}" for card_type in self.data_processor.scryfall_features_lists["card_types"]]
+        artifact_labels = [f"is_{artifact_type}" for artifact_type in self.data_processor.scryfall_features_lists["artifact_types"]]
+        creature_labels = [f"is_{creature_type}" for creature_type in self.data_processor.scryfall_features_lists["creature_types"]]
+        enchantment_labels = [f"is_{enchantment_type}" for enchantment_type in self.data_processor.scryfall_features_lists["enchantment_types"]]
+        land_labels = [f"is_{land_type}" for land_type in self.data_processor.scryfall_features_lists["land_types"]]
+        planeswalker_labels = [f"is_{planeswalker_type}" for planeswalker_type in self.data_processor.scryfall_features_lists["planeswalker_types"]]
+        spell_labels = [f"is_{spell_type}" for spell_type in self.data_processor.scryfall_features_lists["spell_types"]]
+        keyword_abilities_labels = [f"has_{keyword}" for keyword in self.data_processor.scryfall_features_lists["keyword_abilities"]]
+        keyword_actions_labels = [f"has_{keyword}" for keyword in self.data_processor.scryfall_features_lists["keyword_actions"]]
+        ability_words_labels = [f"has_{word}" for word in self.data_processor.scryfall_features_lists["ability_words"]]
+
+        card_search_labels = (supertype_labels +
+                              card_types_labels +
+                              artifact_labels +
+                              creature_labels +
+                              enchantment_labels +
+                              land_labels + 
+                              planeswalker_labels +
+                              spell_labels + 
+                              keyword_abilities_labels +
+                              keyword_actions_labels + 
+                              ability_words_labels)
+
+        self.supertype_features = self.data_processor.df[supertype_labels].fillna(False).astype(int).values
+        self.card_types_features = self.data_processor.df[card_types_labels].fillna(False).astype(int).values
+        self.artifact_types_features = self.data_processor.df[artifact_labels].fillna(False).astype(int).values
+        self.creature_types_features = self.data_processor.df[creature_labels].fillna(False).astype(int).values
+        self.enchantment_types_features = self.data_processor.df[enchantment_labels].fillna(False).astype(int).values
+        self.land_types_features = self.data_processor.df[land_labels].fillna(False).astype(int).values
+        self.planeswalker_types_features = self.data_processor.df[planeswalker_labels].fillna(False).astype(int).values
+        self.spell_types_features = self.data_processor.df[spell_labels].fillna(False).astype(int).values
+        self.keyword_abilities_features = self.data_processor.df[keyword_abilities_labels].fillna(False).astype(int).values
+        self.keyword_actions_features = self.data_processor.df[keyword_actions_labels].fillna(False).astype(int).values
+        self.ability_words_features = self.data_processor.df[ability_words_labels].fillna(False).astype(int).values
+
+        self.type_line_and_oracle_features = np.hstack([self.supertype_features,
+                                                        self.card_types_features,
+                                                        self.artifact_types_features,
+                                                        self.creature_types_features,
+                                                        self.enchantment_types_features,
+                                                        self.land_types_features,
+                                                        self.planeswalker_types_features,
+                                                        self.spell_types_features,
+                                                        self.keyword_abilities_features,
+                                                        self.keyword_actions_features,
+                                                        self.ability_words_features])
+        #############################################################
+
+        ####### text features ######################################
+        self.oracle_text_vec_features = self.data_processor.df[list(self.oracle_text_vec_list[0].keys())].fillna(0).astype(int).values
+        self.card_name_vec_features = self.data_processor.df[list(self.card_name_text_vec_list[0].keys())].fillna(0).astype(int).values
+
+        self.text_features = np.hstack([self.oracle_text_vec_features,
+                                        self.card_name_vec_features])
+
+        text_labels = self.oracle_text_vec_list + self.card_name_text_vec_list
+        ############################################################
+
+        ###### battle features #####################################
+
+        self.battle_features = self.data_processor.df[self.data_processor.battle_attributes].fillna(-1).values
         self.battle_features = np.nan_to_num(x = self.battle_features,
                                              nan = -1,
                                              posinf = 1e6,
                                              neginf = -1e6)
-        
-        self.battle_features = self.standardscaler.fit_transform(self.battle_features)
-        
-        # oracle_features
-        self.oracle_features = np.stack(self.data_processor.df["oracle_text_avg_vec"].values, axis = 0)
-        self.oracle_features = self.standardscaler.fit_transform(self.oracle_features)
-        
-        # keyword features
-        self.keyword_features = np.stack(self.data_processor.df["keywords_string_avg_vec"].values, axis = 0)
-        self.keyword_features = self.standardscaler.fit_transform(self.keyword_features)
-        
-        # card name features
-        self.card_name_features = np.stack(self.data_processor.df["card_name_avg_vec"].values, axis = 0)
-        self.card_name_features = self.standardscaler.fit_transform(self.card_name_features)
-        
-        # card subtype features
-        self.card_subtype_features = np.stack(self.data_processor.df["card_subtype_avg_vec"].values, axis = 0)
-        self.card_subtype_features = self.standardscaler.fit_transform(self.card_subtype_features)
-        
-        self.binary_features = np.hstack([self.color_type_features,
-                                          self.primary_card_type_features,
-                                          self.secondary_card_type_features,
-                                          self.rarity_features])
-        
-        self.numerical_features = np.hstack([self.color_pips_features, 
-                                             self.battle_features])
 
-        self.model_features = np.concatenate([self.binary_features,
-                                              self.numerical_features,
-                                              self.oracle_features,
-                                              self.keyword_features,
-                                              self.card_subtype_features,
-                                              self.card_name_features],
-                                              axis = 1)
-        
-        self.scaled_model_features = np.concatenate([self.binary_features * .2,
-                                                     self.numerical_features * .1,
-                                                     self.oracle_features * .3,
-                                                     self.keyword_features * .1,
-                                                     self.card_subtype_features * .15,
-                                                     self.card_name_features * .15],
-                                                     axis = 1)
-        
-        self.feature_names = (color_type_features +  primary_card_type +
-                              secondary_card_type + rarity_type + 
-                              color_pips + battle_attributes_type +
-                              [f"ocacle_feature_{i}" for i in range(1, 101)] +
-                              [f"keyword_feature_{i}" for i in range(1, 51)] + 
-                              [f"card_subtype_features{i}" for i in range(1, 41)] +
-                              [f"card_name_feature_{i}" for i in range(1, 41)])
+        self.battle_features = self.robustscaler.fit_transform(self.battle_features)
+        ############################################################
 
-        
-    def train_KNN_model(self, neighbors = 6, n_features = 50):
-        
-        self.pca_model = PCA(n_components = n_features, random_state = 99)  # Reduce dimensions significantly
-        self.scaled_model_features_pca = self.pca_model.fit_transform(self.scaled_model_features)
-        self.unscaled_model_features_pca = self.pca_model.fit_transform(self.model_features)
-        
-        self.knn_model_scaled = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.scaled_model_features_pca)
-        self.knn_model_unscaled = NearestNeighbors(n_neighbors = neighbors, algorithm = "ball_tree").fit(self.unscaled_model_features_pca)
+        self.model_inputs = np.hstack([self.color_features,
+                                       self.rarity_features,
+                                       self.type_line_and_oracle_features,
+                                       self.text_features,
+                                       self.battle_features])
+
+        self.model_input_labels = (color_labels +
+                                   rarity_labels +
+                                   card_search_labels +
+                                   text_labels + 
+                                   self.data_processor.battle_attributes)
+
+    def cosine_similarity_model(self, input_vec):
     
-    def find_nearest_neighbor_scaled(self, user_card_name):
-        
+        # Ensure input_vec is 2D (samples, features) as expected by cosine_similarity
+        if isinstance(input_vec, list):
+            input_vec = np.array(input_vec)
+    
+        if len(input_vec.shape) == 1:
+            input_vec = input_vec.reshape(1, -1)
+    
+        # Ensure self.model_inputs is a numpy array
+        if not isinstance(self.model_inputs, np.ndarray):
+            self.model_inputs = np.array(self.model_inputs)
+    
+        similarity_results = cosine_similarity(input_vec, self.model_inputs)
+    
+        similarity_scores = similarity_results[0]  # Flatten to 1D array
+    
+        top_indices = np.argsort(similarity_scores)[-11:][::-1]  # Indices of top 5, highest first
+        top_scores = similarity_scores[top_indices]
+
+        return top_indices, top_scores
+
+    def card_rec_search(self, user_card_name):
+
         user_card_name = user_card_name.lower().strip()
         
         card_match = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name]
@@ -682,120 +745,50 @@ class CardRecommenderModel:
         if card_match.empty:
             
             print(f"{user_card_name} not found")
-            return None
+            return False
 
         input_card_index = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name].index[0]
-        input_card_features = self.scaled_model_features_pca[input_card_index].reshape(1, -1)
+        input_card_features = self.model_inputs[input_card_index]
         
-        distances, indices = self.knn_model_scaled.kneighbors(input_card_features)
+        indices, scores = self.cosine_similarity_model(input_card_features)
         
         input_card_info = self.data_processor.df.iloc[input_card_index, :]
         
         print(f"\nInput Card: {input_card_info['card_name']}")
-        print(f"\nCard Type: {input_card_info['card_type']}")
+        print(f"\nCard Type: {input_card_info['type_line']}")
         print(f"\nMana Cost: {input_card_info.get('mana_cost', 'No Mana Cost')}")
         print(f"\nOracle Text: {input_card_info.get('oracle_text', 'No Oracle Text')}")
         print("\n" + "=" * 60)
         print("RECOMMENDED CARDS")
-        
-        recommendations_data = self.data_processor.df.loc[indices[0], ].reset_index()
+
+        recommendations_data = self.data_processor.df.loc[indices, ].reset_index()
         recommendations_data = recommendations_data.iloc[1: ]
         
         for index, row in recommendations_data.iterrows():
             
             print(f"\nRecommended Card {index}: {row['card_name']}")
-            print(f"\nCard Type {index}: {row['card_type']}")
+            print(f"\nCard Type {index}: {row['type_line']}")
             print(f"\nMana Cost: {index}: {row['mana_cost']}")
             print(f"\nOracle Text: {index}: {row['oracle_text']}")
             print("\n" + "=" * 60)
-
-    def find_nearest_neighbor_unscaled(self, user_card_name):
-        
-        user_card_name = user_card_name.lower().strip()
-        
-        card_match = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name]
-        
-        if card_match.empty:
-            
-            print(f"{user_card_name} not found")
-            return None
-
-        input_card_index = self.data_processor.df[self.data_processor.df["card_name"].str.lower() == user_card_name].index[0]
-        input_card_features = self.unscaled_model_features_pca[input_card_index].reshape(1, -1)
-        
-        distances, indices = self.knn_model_unscaled.kneighbors(input_card_features)
-        
-        input_card_info = self.data_processor.df.iloc[input_card_index, :]
-        
-        print(f"\nInput Card: {input_card_info['card_name']}")
-        print(f"\nCard Type: {input_card_info['card_type']}")
-        print(f"\nMana Cost: {input_card_info.get('mana_cost', 'No Mana Cost')}")
-        print(f"\nOracle Text: {input_card_info.get('oracle_text', 'No Oracle Text')}")
-        print("\n" + "=" * 60)
-        print("RECOMMENDED CARDS")
-        
-        recommendations_data = self.data_processor.df.loc[indices[0], ].reset_index()
-        recommendations_data = recommendations_data.iloc[1: ]
-        
-        for index, row in recommendations_data.iterrows():
-            
-            print(f"\nRecommended Card {index}: {row['card_name']}")
-            print(f"\nCard Type {index}: {row['card_type']}")
-            print(f"\nMana Cost: {index}: {row['mana_cost']}")
-            print(f"\nOracle Text: {index}: {row['oracle_text']}")
-            print("\n" + "=" * 60)
-        
-    def train_kmeans_model(self, n_clusters = 8):
-        
-        self.kmeans_model = KMeans(n_clusters = n_clusters, random_state = 99)
-        self.cluster_names = self.kmeans_model.fit_predict(self.unscaled_model_features_pca)
-        
-    def train_tsne(self, n_components = 2):
-        
-        self.tsne_model = TSNE(n_components = n_components, random_state = 99)
-        self.tsne_features = self.tsne_model.fit_transform(self.unscaled_model_features_pca)
-        
-    def analyze_clusters(self):
-        
-        self.data_processor.df["cluster"] = self.cluster_names
-        
-        self.card_type_by_cluster = self.data_processor.df.groupby("cluster")["card_type"].value_counts().reset_index()
-        self.card_type_by_cluster = self.card_type_by_cluster.sort_values(by = ["cluster", "count"], ascending = [True, False])
-        self.card_type_by_cluster = self.card_type_by_cluster.groupby("cluster").head(5).reset_index(drop = True)
-        
-        self.card_subtype_by_cluster = self.data_processor.df.groupby("cluster")["card_subtype"].value_counts().reset_index()
-        self.card_subtype_by_cluster = self.card_subtype_by_cluster.sort_values(by = ["cluster", "count"], ascending = [True, False])
-        self.card_subtype_by_cluster = self.card_subtype_by_cluster.groupby("cluster").head(5).reset_index(drop = True)
-
-        self.color_by_cluster = self.data_processor.df.groupby("cluster").agg({
-            
-            "is_blue" : "sum",
-            "is_red" : "sum",
-            "is_black" : "sum",
-            "is_green" : "sum",
-            "is_white" : "sum",
-            "is_colorless" : "sum"
-            
-        }).reset_index(drop = False)
-
-    def RandomForest_for_clusters(self):
-
-        X = self.model_features
-        y = self.cluster_names
-
-        self.rf_cluster_model = RandomForestClassifier(n_estimators = 100, random_state = 99)
-        self.rf_cluster_model.fit(X, y)
 
     def train_models(self):
 
         self.legal_cards_for_format()
         self.tokenize_text()
-        self.trainWord2Vec_model()
-        self.average_word_vector_to_df()
+        self.trainFastText_model()
+        self.fit_tfidf_vectorizers()
+        self.tfidf_weighted_average_vectors()
+        self.join_text_vectors()
         self.get_model_inputs()
-        self.train_KNN_model()
-        self.train_kmeans_model()
-        self.RandomForest_for_clusters()
+        
+        
+class DatabaseConnection(CardRecommenderModel):
+    
+    def __init__(self, data_processor, stopwords):
+        
+        super().__init__(data_processor, stopwords)
+        
 
 class DataVisuals:
     
@@ -969,11 +962,11 @@ class CardRecommnderUserInterface:
             
             print("\n" + "="*60)
             print("Which card would you like a recommendation for?")
-            user_card = input().lower().strip()
+            user_card = input()
             
             try:
                 
-                self.card_rec_model.find_nearest_neighbor_unscaled(user_card)
+                self.card_rec_model.card_rec_search(user_card)
             
             except Exception as e:
                 
@@ -1004,75 +997,5 @@ class CardRecommnderUserInterface:
                 
                     print(f"{self.does_the_user_want_a_rec} is not a valid response.")
                     print("Please enter Y or N")
-        
-        
-        
-        
-        
-    
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-                    
-    
-                
-        
- 
-        
-        
-            
-            
-        
-        
-        
-        
-        
- 
-        
- 
-        
-        
-        
-        
-   
-    
-        
-    
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-    
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-                    
-    
-                
         
  
